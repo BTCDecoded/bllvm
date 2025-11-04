@@ -35,35 +35,52 @@ jobs:
 
   verify-consensus:
     needs: read-versions
-    uses: ./.github/workflows/verify_consensus.yml
+    uses: ./.github/workflows/verify_consensus_cached.yml
     with:
       repo: consensus-proof
       kani: true
       ref: ${{ needs.read-versions.outputs.cp }}
+      use_cache: true
+      timeout_minutes: 120
 
   build-protocol-engine:
     needs: verify-consensus
-    uses: ./.github/workflows/build_lib.yml
+    uses: ./.github/workflows/build_lib_cached.yml
     with:
       repo: protocol-engine
       package: protocol-engine
       ref: ${{ needs.read-versions.outputs.pe }}
+      features: ""
+      release: true
+      verify_deterministic: false
+      use_cache: true
+      timeout_minutes: 60
 
   build-reference-node:
     needs: build-protocol-engine
-    uses: ./.github/workflows/build_lib.yml
+    uses: ./.github/workflows/build_lib_cached.yml
     with:
       repo: reference-node
       package: reference-node
       ref: ${{ needs.read-versions.outputs.rn }}
+      features: ""
+      release: true
+      verify_deterministic: false
+      use_cache: true
+      timeout_minutes: 90
 
   build-developer-sdk:
     needs: build-reference-node
-    uses: ./.github/workflows/build_lib.yml
+    uses: ./.github/workflows/build_lib_cached.yml
     with:
       repo: developer-sdk
       package: developer-sdk
       ref: ${{ needs.read-versions.outputs.ds }}
+      features: ""
+      release: true
+      verify_deterministic: false
+      use_cache: true
+      timeout_minutes: 60
 
   build-governance-app-image:
     needs: build-developer-sdk
@@ -75,6 +92,8 @@ jobs:
       push: false
       ref: ${{ needs.read-versions.outputs.ga }}
       tag: ${{ needs.read-versions.outputs.ga }}
+      use_cache: true
+      timeout_minutes: 30
 
   deploy-signal:
     needs: build-governance-app-image

@@ -1,5 +1,6 @@
-# Version Coordination Manifest for BTCDecoded Ecosystem
+# Version Coordination Manifest for Bitcoin Commons Ecosystem
 # Tracks compatible versions across all repositories
+# Managed by BTCDecoded organization
 #
 # Format:
 # [versions]
@@ -18,7 +19,7 @@ governance-app = { version = "0.1.0", git_tag = "v0.1.0", git_commit = "", requi
 
 # Metadata
 [metadata]
-last_updated = ""
-updated_by = ""
-release_notes = ""
+last_updated = "2025-01-XX"
+updated_by = "System Review"
+release_notes = "Initial version coordination for Bitcoin Commons v0.1.0 release set"
 

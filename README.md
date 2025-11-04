@@ -1,10 +1,10 @@
-# BTCDecoded Commons - Build and Release System
+# Bitcoin Commons - Build and Release System
 
-This repository contains the unified build orchestration and release automation infrastructure for the BTCDecoded ecosystem.
+This repository contains the unified build orchestration and release automation infrastructure for the Bitcoin Commons ecosystem.
 
 ## Overview
 
-The BTCDecoded project consists of multiple independent git repositories with complex dependencies:
+The Bitcoin Commons project consists of multiple independent git repositories with complex dependencies:
 
 - **consensus-proof** (foundation library)
 - **protocol-engine** (depends on consensus-proof)
@@ -22,16 +22,17 @@ This repository provides:
 
 ## Quick Start
 
-### Building All Repositories
+### Building All Repositories Locally
 
+**Simplest way:**
 ```bash
 # Clone commons repository
 git clone https://github.com/BTCDecoded/commons.git
 cd commons
 
-# Ensure all BTCDecoded repos are cloned in parent directory
+# Ensure all Bitcoin Commons repos are cloned in parent directory
 # Expected structure:
-# BTCDecoded/
+# BTCDecoded/  # GitHub organization directory
 #   ├── commons/
 #   ├── consensus-proof/
 #   ├── protocol-engine/
@@ -39,12 +40,20 @@ cd commons
 #   ├── developer-sdk/
 #   └── governance-app/
 
-# Build all repos in development mode (uses local path dependencies)
-./build.sh --mode dev
+# Build everything (easiest)
+./build-local.sh
 
-# Build all repos in release mode (uses git dependencies)
-./build.sh --mode release
+# Or use full build script
+./build.sh --mode dev
 ```
+
+**For release builds:**
+```bash
+# Complete release chain
+./scripts/build-release-chain.sh
+```
+
+See [Quick Start Guide](docs/guides/QUICK_START.md) for more details.
 
 ### Using Workflows from Other Repositories
 
@@ -78,9 +87,16 @@ commons/
 │   ├── setup-build-env.sh       # Setup build environment
 │   ├── collect-artifacts.sh     # Package binaries
 │   ├── create-release.sh        # Release creation
+│   ├── build-release-chain.sh   # Complete release chain
 │   └── verify-versions.sh       # Version validation
-└── docs/
-    └── BUILD_SYSTEM.md          # Detailed documentation
+├── docs/
+│   ├── build/                   # Build system documentation
+│   ├── workflows/               # Workflow documentation
+│   ├── testing/                 # Testing documentation
+│   └── guides/                  # Quick reference guides
+└── ops/
+    ├── SELF_HOSTED_RUNNER.md    # Runner setup
+    └── RUNNER_FLEET.md          # Runner fleet management
 ```
 
 ## Version Coordination
@@ -88,6 +104,17 @@ commons/
 The `versions.toml` file tracks compatible versions across all repositories. This ensures that releases are built with compatible dependency versions.
 
 See `versions.toml` for current version mappings.
+
+## Documentation
+
+Comprehensive documentation is organized in the `docs/` directory:
+
+- **[Build System](docs/build/)** - Build system documentation and guides
+- **[Workflows](docs/workflows/)** - Workflow methodology and enhancements
+- **[Testing](docs/testing/)** - Testing and validation documentation
+- **[Guides](docs/guides/)** - Quick reference guides
+
+See [docs/README.md](docs/README.md) for complete documentation index.
 
 ## License
 

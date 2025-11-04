@@ -25,11 +25,27 @@ on:
         required: false
         type: boolean
         default: false
+      timeout_minutes:
+        required: false
+        type: number
+        default: 60
+
+permissions:
+  contents: read
+  actions: read
+
+env:
+  RUST_BACKTRACE: '1'
+  CARGO_TERM_COLOR: 'always'
+  RUSTFLAGS: '-C debuginfo=0 -C link-arg=-s'
+  CI: 'true'
+  CARGO_INCREMENTAL: '1'
 
 jobs:
   build:
     # Prefer runners with rust label, fallback to basic
     runs-on: self-hosted,linux,x64,rust
+    timeout-minutes: ${{ inputs.timeout_minutes }}
     steps:
       - name: Checkout target repository
         uses: actions/checkout@v4
@@ -39,11 +55,6 @@ jobs:
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
-
-      - name: Ensure deterministic env
-        run: |
-          export RUSTFLAGS="-C debuginfo=0 -C link-arg=-s"
-          echo "RUSTFLAGS=$RUSTFLAGS" >> $GITHUB_ENV
 
       - name: Build
         run: |

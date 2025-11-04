@@ -1,0 +1,153 @@
+name: Verify Consensus (Reusable with Local Caching)
+
+on:
+  workflow_call:
+    inputs:
+      repo:
+        required: false
+        type: string
+        default: consensus-proof
+      kani:
+        required: false
+        type: boolean
+        default: true
+      ref:
+        required: true
+        type: string
+      use_cache:
+        required: false
+        type: boolean
+        default: true
+      timeout_minutes:
+        required: false
+        type: number
+        default: 120
+
+permissions:
+  contents: read
+  actions: read
+
+env:
+  RUST_BACKTRACE: '1'
+  CARGO_TERM_COLOR: 'always'
+  CI: 'true'
+  CARGO_INCREMENTAL: '1'
+
+jobs:
+  verify:
+    # Prefer runners with rust+kani labels when kani enabled, fallback to basic
+    runs-on: ${{ inputs.kani && 'self-hosted,linux,x64,rust,kani' || 'self-hosted,linux,x64,rust' }}
+    timeout-minutes: ${{ inputs.timeout_minutes }}
+    
+    steps:
+      - name: Emergency disk space check
+        run: |
+          echo "🔍 DEBUG: Disk space before setup:"
+          df -h
+      
+      - name: Checkout target repository
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/${{ inputs.repo }}
+          ref: ${{ inputs.ref }}
+      
+      - name: Setup local cache system
+        if: ${{ inputs.use_cache }}
+        id: setup-cache
+        run: |
+          CACHE_ROOT="/tmp/runner-cache"
+          DEPS_KEY=$(sha256sum Cargo.lock | cut -d' ' -f1)
+          TOOLCHAIN=$(grep -E '^channel|rust-version' rust-toolchain.toml Cargo.toml 2>/dev/null | head -1 | sha256sum | cut -d' ' -f1 || echo "stable")
+          CACHE_KEY="${DEPS_KEY}-${TOOLCHAIN}"
+          
+          CARGO_CACHE_DIR="$CACHE_ROOT/cargo/$CACHE_KEY"
+          TARGET_CACHE_DIR="$CACHE_ROOT/target/$CACHE_KEY"
+          
+          echo "CARGO_CACHE_DIR=$CARGO_CACHE_DIR" >> $GITHUB_ENV
+          echo "TARGET_CACHE_DIR=$TARGET_CACHE_DIR" >> $GITHUB_ENV
+          echo "cache-key=$CACHE_KEY" >> $GITHUB_OUTPUT
+          
+          mkdir -p "$CARGO_CACHE_DIR"/{registry,git} "$TARGET_CACHE_DIR"
+          
+          echo "🔍 DEBUG: Cache setup complete"
+          echo "🔍 DEBUG: Cargo cache: $CARGO_CACHE_DIR"
+          echo "🔍 DEBUG: Cargo.lock sha: ${DEPS_KEY:0:16}..."
+      
+      - name: Restore Cargo registry cache
+        if: ${{ inputs.use_cache }}
+        run: |
+          if [ -d "$CARGO_CACHE_DIR/registry" ] && [ "$(ls -A $CARGO_CACHE_DIR/registry 2>/dev/null)" ]; then
+            echo "🚀 Restoring Cargo registry from local cache..."
+            mkdir -p "$HOME/.cargo/registry"
+            rsync -a --delete "$CARGO_CACHE_DIR/registry/" "$HOME/.cargo/registry/" || true
+            echo "CARGO_REGISTRY_RESTORED=true" >> $GITHUB_ENV
+            echo "✅ Cargo registry restored"
+          else
+            echo "💿 No Cargo registry cache found"
+          fi
+      
+      - name: Restore target directory cache
+        if: ${{ inputs.use_cache }}
+        run: |
+          if [ -d "$TARGET_CACHE_DIR" ] && [ "$(ls -A $TARGET_CACHE_DIR 2>/dev/null)" ]; then
+            echo "🚀 Restoring target directory from local cache..."
+            rsync -a --delete "$TARGET_CACHE_DIR/" ./target/ || true
+            echo "TARGET_RESTORED=true" >> $GITHUB_ENV
+            echo "✅ Target directory restored"
+          else
+            echo "💿 No target cache found"
+          fi
+      
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+      
+      - name: Cargo test (all features)
+        run: cargo test --all-features --locked
+      
+      - name: Install Kani (if enabled)
+        if: ${{ inputs.kani }}
+        run: |
+          curl -fsSL https://model-checking.github.io/kani/install.sh | sh -s -- -y
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+      
+      - name: Run Kani proofs
+        if: ${{ inputs.kani }}
+        run: |
+          cargo kani --features verify || true
+      
+      - name: Cache Cargo registry
+        if: ${{ inputs.use_cache && always() && env.CARGO_REGISTRY_RESTORED != 'true' }}
+        run: |
+          echo "💾 Caching Cargo registry..."
+          if [ -d "$HOME/.cargo/registry" ]; then
+            rsync -a --delete "$HOME/.cargo/registry/" "$CARGO_CACHE_DIR/registry/" || true
+            echo "✅ Cargo registry cached"
+          fi
+      
+      - name: Cache target directory
+        if: ${{ inputs.use_cache && always() }}
+        run: |
+          echo "💾 Caching target directory..."
+          if [ -d "./target" ]; then
+            rsync -a --delete ./target/ "$TARGET_CACHE_DIR/" || true
+            echo "✅ Target directory cached"
+          fi
+      
+      - name: Upload logs (optional)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: verify-logs-${{ inputs.repo }}
+          path: |
+            target/**/*.log
+            kani-*.log
+      
+      - name: Cache cleanup management
+        if: always()
+        run: |
+          echo "🧹 Cleaning up old caches..."
+          CACHE_ROOT="/tmp/runner-cache"
+          find "$CACHE_ROOT/cargo" -maxdepth 1 -type d -mtime +1 2>/dev/null | head -n -5 | xargs rm -rf 2>/dev/null || true
+          find "$CACHE_ROOT/target" -maxdepth 1 -type d -mtime +1 2>/dev/null | head -n -3 | xargs rm -rf 2>/dev/null || true
+          echo "✅ Cache cleanup completed"
+

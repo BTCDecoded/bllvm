@@ -16,9 +16,35 @@ NC='\033[0m' # No Color
 # Configuration
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PARENT_DIR="$(dirname "$SCRIPT_DIR")"
-MODE="${1:-dev}"
+MODE="dev"
 ARTIFACTS_DIR="${SCRIPT_DIR}/artifacts"
 TARGET_DIR="target/release"
+
+# Functions (defined early for use in argument parsing)
+log_info() {
+    echo -e "${BLUE}[INFO]${NC} $1"
+}
+
+log_success() {
+    echo -e "${GREEN}[SUCCESS]${NC} $1"
+}
+
+log_warn() {
+    echo -e "${YELLOW}[WARN]${NC} $1"
+}
+
+log_error() {
+    echo -e "${RED}[ERROR]${NC} $1"
+}
+
+# Parse arguments
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --mode) MODE="$2"; shift 2 ;;
+        dev|release) MODE="$1"; shift ;; # Backward compatibility
+        *) log_error "Unknown argument: $1"; exit 1 ;;
+    esac
+done
 
 # Repository configuration
 declare -A REPOS
@@ -43,23 +69,6 @@ BINARIES[protocol-engine]=""
 BINARIES[reference-node]="reference-node"
 BINARIES[developer-sdk]="bllvm-keygen bllvm-sign bllvm-verify"
 BINARIES[governance-app]="governance-app key-manager test-content-hash test-content-hash-standalone"
-
-# Functions
-log_info() {
-    echo -e "${BLUE}[INFO]${NC} $1"
-}
-
-log_success() {
-    echo -e "${GREEN}[SUCCESS]${NC} $1"
-}
-
-log_warn() {
-    echo -e "${YELLOW}[WARN]${NC} $1"
-}
-
-log_error() {
-    echo -e "${RED}[ERROR]${NC} $1"
-}
 
 check_rust_toolchain() {
     log_info "Checking Rust toolchain..."

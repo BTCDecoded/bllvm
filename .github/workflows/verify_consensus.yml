@@ -14,11 +14,26 @@ on:
       ref:
         required: true
         type: string
+      timeout_minutes:
+        required: false
+        type: number
+        default: 120
+
+permissions:
+  contents: read
+  actions: read
+
+env:
+  RUST_BACKTRACE: '1'
+  CARGO_TERM_COLOR: 'always'
+  CI: 'true'
+  CARGO_INCREMENTAL: '1'
 
 jobs:
   verify:
     # Prefer runners with rust+kani labels when kani enabled, fallback to basic
     runs-on: ${{ inputs.kani && 'self-hosted,linux,x64,rust,kani' || 'self-hosted,linux,x64,rust' }}
+    timeout-minutes: ${{ inputs.timeout_minutes }}
     steps:
       - name: Checkout target repository
         uses: actions/checkout@v4

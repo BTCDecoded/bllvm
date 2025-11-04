@@ -1,0 +1,235 @@
+name: Build Library/Binary (Reusable with Local Caching)
+
+on:
+  workflow_call:
+    inputs:
+      repo:
+        required: true
+        type: string
+      package:
+        required: false
+        type: string
+        default: ""
+      features:
+        required: false
+        type: string
+        default: ""
+      release:
+        required: false
+        type: boolean
+        default: true
+      ref:
+        required: true
+        type: string
+      verify_deterministic:
+        required: false
+        type: boolean
+        default: false
+      use_cache:
+        required: false
+        type: boolean
+        default: true
+      timeout_minutes:
+        required: false
+        type: number
+        default: 60
+
+permissions:
+  contents: read
+  actions: read
+
+env:
+  RUST_BACKTRACE: '1'
+  CARGO_TERM_COLOR: 'always'
+  RUSTFLAGS: '-C debuginfo=0 -C link-arg=-s'
+  CI: 'true'
+  CARGO_INCREMENTAL: '1'
+
+jobs:
+  build:
+    # Prefer runners with rust label, fallback to basic
+    runs-on: self-hosted,linux,x64,rust
+    timeout-minutes: ${{ inputs.timeout_minutes }}
+    
+    steps:
+      - name: Emergency disk space check
+        run: |
+          echo "🔍 DEBUG: Disk space before setup:"
+          df -h
+          # Clean old caches if disk is getting full
+          if [ $(df / | tail -1 | awk '{print $5}' | sed 's/%//') -gt 80 ]; then
+            echo "⚠️ Disk space >80%, cleaning old caches..."
+            find /tmp/runner-cache -maxdepth 2 -type d -mtime +7 -exec rm -rf {} + 2>/dev/null || true
+            echo "🔍 DEBUG: Disk space after cleanup:"
+            df -h
+          fi
+      
+      - name: Checkout target repository
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/${{ inputs.repo }}
+          ref: ${{ inputs.ref }}
+      
+      - name: Setup local cache system
+        if: ${{ inputs.use_cache }}
+        id: setup-cache
+        run: |
+          CACHE_ROOT="/tmp/runner-cache"
+          # Create cache key from Cargo.lock hash + toolchain version
+          DEPS_KEY=$(sha256sum Cargo.lock | cut -d' ' -f1)
+          TOOLCHAIN=$(grep -E '^channel|rust-version' rust-toolchain.toml Cargo.toml 2>/dev/null | head -1 | sha256sum | cut -d' ' -f1 || echo "stable")
+          CACHE_KEY="${DEPS_KEY}-${TOOLCHAIN}"
+          
+          CARGO_CACHE_DIR="$CACHE_ROOT/cargo/$CACHE_KEY"
+          TARGET_CACHE_DIR="$CACHE_ROOT/target/$CACHE_KEY"
+          
+          echo "CARGO_CACHE_DIR=$CARGO_CACHE_DIR" >> $GITHUB_ENV
+          echo "TARGET_CACHE_DIR=$TARGET_CACHE_DIR" >> $GITHUB_ENV
+          echo "cache-key=$CACHE_KEY" >> $GITHUB_OUTPUT
+          
+          mkdir -p "$CARGO_CACHE_DIR"/{registry,git} "$TARGET_CACHE_DIR"
+          
+          echo "🔍 DEBUG: Cache setup complete"
+          echo "🔍 DEBUG: Cargo cache: $CARGO_CACHE_DIR"
+          echo "🔍 DEBUG: Target cache: $TARGET_CACHE_DIR"
+          echo "🔍 DEBUG: Cargo.lock sha: ${DEPS_KEY:0:16}..."
+      
+      - name: Restore Cargo registry cache
+        if: ${{ inputs.use_cache }}
+        run: |
+          if [ -d "$CARGO_CACHE_DIR/registry" ] && [ "$(ls -A $CARGO_CACHE_DIR/registry 2>/dev/null)" ]; then
+            echo "🚀 Restoring Cargo registry from local cache..."
+            mkdir -p "$HOME/.cargo/registry"
+            rsync -a --delete "$CARGO_CACHE_DIR/registry/" "$HOME/.cargo/registry/" || true
+            echo "CARGO_REGISTRY_RESTORED=true" >> $GITHUB_ENV
+            echo "✅ Cargo registry restored (size: $(du -sh $HOME/.cargo/registry 2>/dev/null | cut -f1 || echo 'N/A'))"
+          else
+            echo "💿 No Cargo registry cache found"
+          fi
+      
+      - name: Restore Cargo git cache
+        if: ${{ inputs.use_cache }}
+        run: |
+          if [ -d "$CARGO_CACHE_DIR/git" ] && [ "$(ls -A $CARGO_CACHE_DIR/git 2>/dev/null)" ]; then
+            echo "🚀 Restoring Cargo git cache from local cache..."
+            mkdir -p "$HOME/.cargo/git"
+            rsync -a --delete "$CARGO_CACHE_DIR/git/" "$HOME/.cargo/git/" || true
+            echo "CARGO_GIT_RESTORED=true" >> $GITHUB_ENV
+            echo "✅ Cargo git cache restored"
+          else
+            echo "💿 No Cargo git cache found"
+          fi
+      
+      - name: Restore target directory cache
+        if: ${{ inputs.use_cache }}
+        run: |
+          if [ -d "$TARGET_CACHE_DIR" ] && [ "$(ls -A $TARGET_CACHE_DIR 2>/dev/null)" ]; then
+            echo "🚀 Restoring target directory from local cache..."
+            rsync -a --delete "$TARGET_CACHE_DIR/" ./target/ || true
+            echo "TARGET_RESTORED=true" >> $GITHUB_ENV
+            echo "✅ Target directory restored (size: $(du -sh ./target 2>/dev/null | cut -f1 || echo 'N/A'))"
+          else
+            echo "💿 No target cache found, will build from scratch"
+          fi
+      
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+      
+      - name: Build
+        run: |
+          if [ -n "${{ inputs.package }}" ]; then
+            PKG_ARG="-p ${{ inputs.package }}"
+          else
+            PKG_ARG=""
+          fi
+          if [ -n "${{ inputs.features }}" ]; then
+            FEAT_ARG="--features ${{ inputs.features }}"
+          else
+            FEAT_ARG=""
+          fi
+          
+          echo "🔨 Building with cache: $([ "$TARGET_RESTORED" = "true" ] && echo "incremental" || echo "clean")"
+          cargo build --locked --release $PKG_ARG $FEAT_ARG
+      
+      - name: Cache Cargo registry
+        if: ${{ inputs.use_cache && always() && env.CARGO_REGISTRY_RESTORED != 'true' }}
+        run: |
+          echo "💾 Caching Cargo registry..."
+          if [ -d "$HOME/.cargo/registry" ]; then
+            rsync -a --delete "$HOME/.cargo/registry/" "$CARGO_CACHE_DIR/registry/" || true
+            echo "✅ Cargo registry cached (size: $(du -sh $CARGO_CACHE_DIR/registry 2>/dev/null | cut -f1 || echo 'N/A'))"
+          fi
+      
+      - name: Cache Cargo git
+        if: ${{ inputs.use_cache && always() && env.CARGO_GIT_RESTORED != 'true' }}
+        run: |
+          echo "💾 Caching Cargo git cache..."
+          if [ -d "$HOME/.cargo/git" ]; then
+            rsync -a --delete "$HOME/.cargo/git/" "$CARGO_CACHE_DIR/git/" || true
+            echo "✅ Cargo git cache saved"
+          fi
+      
+      - name: Cache target directory
+        if: ${{ inputs.use_cache && always() }}
+        run: |
+          echo "💾 Caching target directory..."
+          if [ -d "./target" ]; then
+            rsync -a --delete ./target/ "$TARGET_CACHE_DIR/" || true
+            echo "✅ Target directory cached (size: $(du -sh $TARGET_CACHE_DIR 2>/dev/null | cut -f1 || echo 'N/A'))"
+          fi
+      
+      - name: Hash artifacts
+        run: |
+          find target/release -maxdepth 1 -type f -executable -print0 | xargs -0 sha256sum > SHA256SUMS || true
+          sha256sum Cargo.lock >> SHA256SUMS || true
+      
+      - name: Verify deterministic build (optional)
+        if: ${{ inputs.verify_deterministic }}
+        run: |
+          # Store build args
+          if [ -n "${{ inputs.package }}" ]; then
+            PKG_ARG="-p ${{ inputs.package }}"
+          else
+            PKG_ARG=""
+          fi
+          if [ -n "${{ inputs.features }}" ]; then
+            FEAT_ARG="--features ${{ inputs.features }}"
+          else
+            FEAT_ARG=""
+          fi
+          # Clean and rebuild
+          cargo clean
+          cargo build --locked --release $PKG_ARG $FEAT_ARG
+          # Generate second hash set
+          find target/release -maxdepth 1 -type f -executable -print0 | xargs -0 sha256sum > SHA256SUMS2 || true
+          sha256sum Cargo.lock >> SHA256SUMS2 || true
+          # Compare
+          if ! diff -q SHA256SUMS SHA256SUMS2 > /dev/null 2>&1; then
+            echo "ERROR: Non-deterministic build detected!"
+            echo "First build hashes:"
+            cat SHA256SUMS
+            echo "Second build hashes:"
+            cat SHA256SUMS2
+            exit 1
+          fi
+          echo "Deterministic build verified: hashes match"
+      
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.repo }}-artifacts
+          path: |
+            target/release/*
+            SHA256SUMS
+      
+      - name: Cache cleanup management
+        if: always()
+        run: |
+          echo "🧹 Cleaning up old caches..."
+          CACHE_ROOT="/tmp/runner-cache"
+          # Keep last 5 Cargo caches
+          find "$CACHE_ROOT/cargo" -maxdepth 1 -type d -mtime +1 2>/dev/null | head -n -5 | xargs rm -rf 2>/dev/null || true
+          # Keep last 3 target caches (larger)
+          find "$CACHE_ROOT/target" -maxdepth 1 -type d -mtime +1 2>/dev/null | head -n -3 | xargs rm -rf 2>/dev/null || true
+          echo "✅ Cache cleanup completed"
+
