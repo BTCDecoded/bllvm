@@ -2,6 +2,8 @@
 
 This repository contains the unified build orchestration and release automation infrastructure for the Bitcoin Commons ecosystem.
 
+> **For verified system status**: See [SYSTEM_STATUS.md](https://github.com/BTCDecoded/.github/blob/main/SYSTEM_STATUS.md) in the BTCDecoded organization repository.
+
 ## Overview
 
 The Bitcoin Commons project consists of multiple independent git repositories with complex dependencies:
