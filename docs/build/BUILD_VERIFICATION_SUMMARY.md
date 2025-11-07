@@ -120,13 +120,13 @@ cd /path/to/BTCDecoded/commons
 **Scripts correctly handle dependencies:**
 
 ```
-consensus-proof (no deps)
+bllvm-consensus (no deps)
     ↓
-protocol-engine
+bllvm-protocol
     ↓
-reference-node
+bllvm-node
 
-developer-sdk (no deps)
+bllvm-sdk (no deps)
     ↓
 governance-app
 ```

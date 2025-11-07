@@ -99,7 +99,7 @@ main() {
         # Verify all repos
         log_info "Verifying all repository versions..."
         
-        local repos=("consensus-proof" "protocol-engine" "reference-node" "developer-sdk" "governance-app")
+        local repos=("bllvm-consensus" "bllvm-protocol" "bllvm-node" "bllvm-sdk" "governance-app")
         
         local failed=0
         for repo in "${repos[@]}"; do

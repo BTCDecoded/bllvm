@@ -8,14 +8,14 @@ This document defines a consistent, reproducible, and secure workflow model appl
 - **Self-Hosted Only**: All CI runs on `[self-hosted, linux, x64]` runners.
 - **Deterministic Builds**: `--locked` builds, rust-toolchain per repo, artifact hashing.
 - **Security Gates**: Consensus verification (tests + optional Kani) precedes builds downstream.
-- **Clear Ordering**: L2 (consensus-proof) → L3 (protocol-engine) → L4 (reference-node) → developer-sdk → governance-app.
+- **Clear Ordering**: L2 (bllvm-consensus) → L3 (bllvm-protocol) → L4 (bllvm-node) → bllvm-sdk → governance-app.
 
 ## Roles & Separation
 - **commons**: orchestration, version topology, reusable workflows, tooling, policy docs.
-- **consensus-proof (L2)**: consensus math + formal verification; libraries & verification bundles.
-- **protocol-engine (L3)**: abstraction; depends on L2; library.
-- **reference-node (L4)**: infra; depends on L2/L3; binaries.
-- **developer-sdk**: SDK; depends on L4; library/binaries as applicable.
+- **bllvm-consensus (L2)**: consensus math + formal verification; libraries & verification bundles.
+- **bllvm-protocol (L3)**: abstraction; depends on L2; library.
+- **bllvm-node (L4)**: infra; depends on L2/L3; binaries.
+- **bllvm-sdk**: SDK; depends on L4; library/binaries as applicable.
 - **governance-app**: service; Docker image or source build; deploy via self-hosted runner.
 
 ## Required Files
@@ -57,7 +57,7 @@ This document defines a consistent, reproducible, and secure workflow model appl
 ## Local (No-CI) Tooling
 - `commons/tools/build_release_set.sh` — sequence local builds from local clones; optional governance-app source/docker; optional `MANIFEST.json` aggregation
 - `commons/tools/det_build.sh` — deterministic build wrapper
-- `commons/tools/make_verification_bundle.sh` — generate consensus-proof verification bundle; optional OpenTimestamps
+- `commons/tools/make_verification_bundle.sh` — generate bllvm-consensus verification bundle; optional OpenTimestamps
 
 ## Governance & Deploys
 - Deploy signal: commons orchestrator emits `repository_dispatch: deploy` to governance-app with payload `{ tag, image }`

@@ -49,7 +49,7 @@ Examples:
     $0                      # Auto-heal with default settings
     $0 -i 60                # Check every 60 seconds
     $0 --no-auto-fix        # Monitor only, don't fix
-    $0 -r consensus-proof   # Monitor consensus-proof repository
+    $0 -r bllvm-consensus   # Monitor bllvm-consensus repository
 
 EOF
 }

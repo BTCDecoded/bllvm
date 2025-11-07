@@ -14,8 +14,8 @@ TARGET_DIR="target/release"
 
 # Binary mapping
 declare -A REPO_BINARIES
-REPO_BINARIES[reference-node]="reference-node"
-REPO_BINARIES[developer-sdk]="bllvm-keygen bllvm-sign bllvm-verify"
+REPO_BINARIES[bllvm-node]="bllvm-node"
+REPO_BINARIES[bllvm-sdk]="bllvm-keygen bllvm-sign bllvm-verify"
 REPO_BINARIES[governance-app]="governance-app key-manager test-content-hash test-content-hash-standalone"
 
 log_info() {
@@ -98,7 +98,7 @@ main() {
     mkdir -p "$BINARIES_DIR"
     
     # Collect binaries from each repo
-    for repo in reference-node developer-sdk governance-app; do
+    for repo in bllvm-node bllvm-sdk governance-app; do
         collect_repo_binaries "$repo"
     done
     

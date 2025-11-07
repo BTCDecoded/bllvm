@@ -95,7 +95,7 @@ cd "$COMMONS_DIR"
 if [ -z "$VERSION_TAG" ]; then
     if [ -f "versions.toml" ]; then
         # Use first repo's version as reference
-        VERSION_TAG=$(grep -E '^consensus-proof' versions.toml | awk -F '="' '{print $2}' | tr -d '"')
+        VERSION_TAG=$(grep -E '^bllvm-consensus' versions.toml | awk -F '="' '{print $2}' | tr -d '"')
         log_info "Using version from versions.toml: $VERSION_TAG"
     else
         log_error "No version tag provided and versions.toml not found"

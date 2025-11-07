@@ -48,26 +48,26 @@ done
 
 # Repository configuration
 declare -A REPOS
-REPOS[consensus-proof]="library"
-REPOS[protocol-engine]="library|consensus-proof"
-REPOS[reference-node]="binary|protocol-engine,consensus-proof"
-REPOS[developer-sdk]="binary"
-REPOS[governance-app]="binary|developer-sdk"
+REPOS[bllvm-consensus]="library"
+REPOS[bllvm-protocol]="library|bllvm-consensus"
+REPOS[bllvm-node]="binary|bllvm-protocol,bllvm-consensus"
+REPOS[bllvm-sdk]="binary"
+REPOS[governance-app]="binary|bllvm-sdk"
 
-# Dependency graph
+# Dependency graph (using directory names for paths, package names in Cargo.toml are updated)
 declare -A DEPS
-DEPS[consensus-proof]=""
-DEPS[protocol-engine]="consensus-proof"
-DEPS[reference-node]="protocol-engine consensus-proof"
-DEPS[developer-sdk]=""
-DEPS[governance-app]="developer-sdk"
+DEPS[bllvm-consensus]=""
+DEPS[bllvm-protocol]="bllvm-consensus"
+DEPS[bllvm-node]="bllvm-protocol bllvm-consensus"
+DEPS[bllvm-sdk]=""
+DEPS[governance-app]="bllvm-sdk"
 
 # Binary names
 declare -A BINARIES
-BINARIES[consensus-proof]=""
-BINARIES[protocol-engine]=""
-BINARIES[reference-node]="reference-node"
-BINARIES[developer-sdk]="bllvm-keygen bllvm-sign bllvm-verify"
+BINARIES[bllvm-consensus]=""
+BINARIES[bllvm-protocol]=""
+BINARIES[bllvm-node]="bllvm-node"
+BINARIES[bllvm-sdk]="bllvm-keygen bllvm-sign bllvm-verify"
 BINARIES[governance-app]="governance-app key-manager test-content-hash test-content-hash-standalone"
 
 check_rust_toolchain() {

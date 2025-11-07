@@ -519,7 +519,7 @@ name: Verify Consensus (Reusable)
 on:
   workflow_call:
     inputs:
-      repo: { required: false, type: string, default: consensus-proof }
+      repo: { required: false, type: string, default: bllvm-consensus }
       kani: { required: false, type: boolean, default: true }
       ref: { required: true, type: string }
       use_cache: { required: false, type: boolean, default: true }

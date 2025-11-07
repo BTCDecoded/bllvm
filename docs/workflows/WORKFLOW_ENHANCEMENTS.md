@@ -73,11 +73,11 @@ Enhanced version of `verify_consensus.yml` with:
 ### Option 1: Use Cached Workflows (Recommended)
 ```yaml
 # In release_orchestrator.yml
-build-protocol-engine:
+build-bllvm-protocol:
   uses: ./.github/workflows/build_lib_cached.yml
   with:
-    repo: protocol-engine
-    package: protocol-engine
+    repo: bllvm-protocol
+    package: bllvm-protocol
     ref: ${{ needs.read-versions.outputs.pe }}
     use_cache: true
 ```

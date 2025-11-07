@@ -144,8 +144,8 @@ This document summarizes improvements made to BTCDecoded runner infrastructure a
 # Monitor commons release orchestrator
 ./scripts/monitor-workflows.sh commons release_orchestrator.yml
 
-# Monitor all consensus-proof workflows
-./scripts/monitor-workflows.sh consensus-proof
+# Monitor all bllvm-consensus workflows
+./scripts/monitor-workflows.sh bllvm-consensus
 ```
 
 ### Auto-Heal CI
@@ -163,7 +163,7 @@ This document summarizes improvements made to BTCDecoded runner infrastructure a
 ./scripts/runner-status.sh
 
 # Quick CI check
-./scripts/check-ci-status.sh consensus-proof
+./scripts/check-ci-status.sh bllvm-consensus
 ```
 
 ### Setup Runner

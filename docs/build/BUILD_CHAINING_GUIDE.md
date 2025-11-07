@@ -12,19 +12,19 @@ This guide explains how to chain build scripts across all BTCDecoded repositorie
 ### Dependency Graph
 
 ```
-consensus-proof (L2) ──┐
-                       ├──→ protocol-engine (L3) ──→ reference-node (L4)
-developer-sdk ─────────┘
+bllvm-consensus (L2) ──┐
+                       ├──→ bllvm-protocol (L3) ──→ bllvm-node (L4)
+bllvm-sdk ─────────┘
                        └──→ governance-app
 ```
 
 ### Build Order
 
-1. **consensus-proof** (parallel with developer-sdk)
-2. **developer-sdk** (parallel with consensus-proof)
-3. **protocol-engine** (depends on consensus-proof)
-4. **reference-node** (depends on protocol-engine + consensus-proof)
-5. **governance-app** (depends on developer-sdk)
+1. **bllvm-consensus** (parallel with bllvm-sdk)
+2. **bllvm-sdk** (parallel with bllvm-consensus)
+3. **bllvm-protocol** (depends on bllvm-consensus)
+4. **bllvm-node** (depends on bllvm-protocol + bllvm-consensus)
+5. **governance-app** (depends on bllvm-sdk)
 
 ## Approach 1: Using GitHub Actions Workflows (Recommended)
 
@@ -39,11 +39,11 @@ gh workflow run release_orchestrator.yml
 
 **What it does:**
 1. Reads `versions.toml` to get version tags for each repo
-2. Verifies consensus-proof (with Kani if enabled)
-3. Builds protocol-engine (depends on consensus-proof)
-4. Builds reference-node (depends on protocol-engine)
-5. Builds developer-sdk
-6. Builds governance-app Docker image (depends on developer-sdk)
+2. Verifies bllvm-consensus (with Kani if enabled)
+3. Builds bllvm-protocol (depends on bllvm-consensus)
+4. Builds bllvm-node (depends on bllvm-protocol)
+5. Builds bllvm-sdk
+6. Builds governance-app Docker image (depends on bllvm-sdk)
 7. Signals deployment
 
 **Benefits:**
@@ -73,10 +73,10 @@ cd /path/to/BTCDecoded/commons
 # Ensure all repos are cloned in parent directory
 # BTCDecoded/
 #   ├── commons/
-#   ├── consensus-proof/
-#   ├── protocol-engine/
-#   ├── reference-node/
-#   ├── developer-sdk/
+#   ├── bllvm-consensus/
+#   ├── bllvm-protocol/
+#   ├── bllvm-node/
+#   ├── bllvm-sdk/
 #   └── governance-app/
 
 # Build all repos in dependency order
@@ -102,10 +102,10 @@ cd /path/to/BTCDecoded/commons
 # Ensure all repos are cloned in BASE directory
 # BASE=/path/to/checkouts
 # BASE/
-#   ├── consensus-proof/
-#   ├── protocol-engine/
-#   ├── reference-node/
-#   ├── developer-sdk/
+#   ├── bllvm-consensus/
+#   ├── bllvm-protocol/
+#   ├── bllvm-node/
+#   ├── bllvm-sdk/
 #   └── governance-app/
 
 # Build release set
@@ -125,7 +125,7 @@ cd /path/to/BTCDecoded/commons
 **What it does:**
 1. Reads `versions.toml` to get version tags
 2. Checks out each repo to the specified tag
-3. Builds consensus-proof → protocol-engine → reference-node → developer-sdk
+3. Builds bllvm-consensus → bllvm-protocol → bllvm-node → bllvm-sdk
 4. Optionally builds governance-app (source and/or Docker)
 5. Generates SHA256SUMS for each repo
 6. Optionally creates MANIFEST.json with all hashes
@@ -137,21 +137,21 @@ cd /path/to/BTCDecoded/commons
 Each repository can be built individually using `det_build.sh`:
 
 ```bash
-# Build consensus-proof
-cd /path/to/consensus-proof
+# Build bllvm-consensus
+cd /path/to/bllvm-consensus
 ../commons/tools/det_build.sh --repo .
 
-# Build protocol-engine (after consensus-proof)
-cd /path/to/protocol-engine
-../commons/tools/det_build.sh --repo . --package protocol-engine
+# Build bllvm-protocol (after bllvm-consensus)
+cd /path/to/bllvm-protocol
+../commons/tools/det_build.sh --repo . --package bllvm-protocol
 
-# Build reference-node (after protocol-engine)
-cd /path/to/reference-node
-../commons/tools/det_build.sh --repo . --package reference-node
+# Build bllvm-node (after bllvm-protocol)
+cd /path/to/bllvm-node
+../commons/tools/det_build.sh --repo . --package bllvm-node
 
-# Build developer-sdk
-cd /path/to/developer-sdk
-../commons/tools/det_build.sh --repo . --package developer-sdk
+# Build bllvm-sdk
+cd /path/to/bllvm-sdk
+../commons/tools/det_build.sh --repo . --package bllvm-sdk
 
 # Build governance-app
 cd /path/to/governance-app
@@ -357,7 +357,7 @@ cd "$COMMONS_DIR"
 mkdir -p "$BASE_DIR"
 ./scripts/setup-build-env.sh --tag "$VERSION_TAG" || {
   # If setup fails, manually clone repos
-  for repo in consensus-proof protocol-engine reference-node developer-sdk governance-app; do
+  for repo in bllvm-consensus bllvm-protocol bllvm-node bllvm-sdk governance-app; do
     if [ ! -d "$BASE_DIR/$repo" ]; then
       git clone "https://github.com/BTCDecoded/$repo.git" "$BASE_DIR/$repo"
     fi
@@ -407,10 +407,10 @@ gh workflow run release_orchestrator.yml
 
 **Workflow chain:**
 1. `read-versions` → Reads `versions.toml`
-2. `verify-consensus` → Verifies consensus-proof
-3. `build-protocol-engine` → Builds protocol-engine
-4. `build-reference-node` → Builds reference-node
-5. `build-developer-sdk` → Builds developer-sdk
+2. `verify-consensus` → Verifies bllvm-consensus
+3. `build-bllvm-protocol` → Builds bllvm-protocol
+4. `build-bllvm-node` → Builds bllvm-node
+5. `build-bllvm-sdk` → Builds bllvm-sdk
 6. `build-governance-app-image` → Builds Docker image
 7. `deploy-signal` → Signals deployment
 
@@ -432,7 +432,7 @@ jobs:
   build-all:
     uses: BTCDecoded/commons/.github/workflows/build_lib_cached.yml
     with:
-      repo: consensus-proof
+      repo: bllvm-consensus
       ref: ${{ inputs.version_tag }}
       use_cache: true
   
@@ -444,10 +444,10 @@ jobs:
 ### `versions.toml` - Single Source of Truth
 
 ```toml
-consensus-proof = "v0.1.0"
-protocol-engine = "v0.1.0"
-reference-node = "v0.1.0"
-developer-sdk = "v0.1.0"
+bllvm-consensus = "v0.1.0"
+bllvm-protocol = "v0.1.0"
+bllvm-node = "v0.1.0"
+bllvm-sdk = "v0.1.0"
 governance-app = "v0.1.0"
 ```
 
@@ -457,14 +457,14 @@ All build scripts read from this file to determine which versions to build toget
 
 ### Binaries Collected
 
-- **reference-node**: `reference-node`
-- **developer-sdk**: `bllvm-keygen`, `bllvm-sign`, `bllvm-verify`
+- **bllvm-node**: `bllvm-node`
+- **bllvm-sdk**: `bllvm-keygen`, `bllvm-sign`, `bllvm-verify`
 - **governance-app**: `governance-app`, `key-manager`, `test-content-hash*`
 
 ### Libraries (No Binaries)
 
-- **consensus-proof**: Library only
-- **protocol-engine**: Library only
+- **bllvm-consensus**: Library only
+- **bllvm-protocol**: Library only
 
 ## Troubleshooting
 

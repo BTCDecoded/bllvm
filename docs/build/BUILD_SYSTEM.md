@@ -9,24 +9,24 @@ The BTCDecoded build system provides unified orchestration for building, testing
 ### Dependency Graph
 
 ```
-consensus-proof (no dependencies)
+bllvm-consensus (no dependencies)
     ↓
-protocol-engine
+bllvm-protocol
     ↓
-reference-node
+bllvm-node
 
-developer-sdk (no dependencies)
+bllvm-sdk (no dependencies)
     ↓
 governance-app
 ```
 
 ### Build Order
 
-1. **consensus-proof** - Foundation library (builds in parallel with developer-sdk)
-2. **developer-sdk** - Standalone CLI tools (builds in parallel with consensus-proof)
-3. **protocol-engine** - Protocol abstraction (depends on consensus-proof)
-4. **reference-node** - Full node (depends on protocol-engine + consensus-proof)
-5. **governance-app** - Governance app (depends on developer-sdk)
+1. **bllvm-consensus** - Foundation library (builds in parallel with bllvm-sdk)
+2. **bllvm-sdk** - Standalone CLI tools (builds in parallel with bllvm-consensus)
+3. **bllvm-protocol** - Protocol abstraction (depends on bllvm-consensus)
+4. **bllvm-node** - Full node (depends on bllvm-protocol + bllvm-consensus)
+5. **governance-app** - Governance app (depends on bllvm-sdk)
 
 ## Usage
 
@@ -52,7 +52,7 @@ cd commons
 Other repositories can call reusable workflows from `commons`:
 
 ```yaml
-# In reference-node/.github/workflows/build.yml
+# In bllvm-node/.github/workflows/build.yml
 name: Build
 
 on: [push, pull_request]
@@ -61,8 +61,8 @@ jobs:
   build:
     uses: BTCDecoded/commons/.github/workflows/build-single.yml@main
     with:
-      repo-name: reference-node
-      required-deps: consensus-proof,protocol-engine
+      repo-name: bllvm-node
+      required-deps: bllvm-consensus,bllvm-protocol
     secrets: inherit
 ```
 
@@ -123,8 +123,8 @@ The `versions.toml` file tracks compatible versions:
 
 ```toml
 [versions]
-consensus-proof = { version = "0.1.0", git_tag = "v0.1.0", ... }
-protocol-engine = { version = "0.1.0", requires = ["consensus-proof=0.1.0"], ... }
+bllvm-consensus = { version = "0.1.0", git_tag = "v0.1.0", ... }
+bllvm-protocol = { version = "0.1.0", requires = ["bllvm-consensus=0.1.0"], ... }
 ```
 
 ## GitHub Actions Workflows
@@ -172,7 +172,7 @@ This builds all components in dependency order using Docker.
 
 Built binaries are collected in `artifacts/binaries/`:
 
-- `reference-node` - Bitcoin reference node
+- `bllvm-node` - Bitcoin reference node
 - `bllvm-keygen`, `bllvm-sign`, `bllvm-verify` - SDK tools
 - `governance-app`, `key-manager`, `test-content-hash*` - Governance tools
 
@@ -192,8 +192,8 @@ Release archives include:
 
 ### Missing Binaries
 
-- Libraries (consensus-proof, protocol-engine) don't produce binaries
-- Only reference-node, developer-sdk, and governance-app produce binaries
+- Libraries (bllvm-consensus, bllvm-protocol) don't produce binaries
+- Only bllvm-node, bllvm-sdk, and governance-app produce binaries
 - Check `target/release/` in each repo after build
 
 ### Version Mismatches

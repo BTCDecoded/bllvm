@@ -71,10 +71,10 @@ cd /path/to/BTCDecoded/commons
 # 1. Clone all repos
 cd /path/to/BTCDecoded
 git clone https://github.com/BTCDecoded/commons.git
-git clone https://github.com/BTCDecoded/consensus-proof.git
-git clone https://github.com/BTCDecoded/protocol-engine.git
-git clone https://github.com/BTCDecoded/reference-node.git
-git clone https://github.com/BTCDecoded/developer-sdk.git
+git clone https://github.com/BTCDecoded/bllvm-consensus.git
+git clone https://github.com/BTCDecoded/bllvm-protocol.git
+git clone https://github.com/BTCDecoded/bllvm-node.git
+git clone https://github.com/BTCDecoded/bllvm-sdk.git
 git clone https://github.com/BTCDecoded/governance-app.git
 
 # 2. Build everything
@@ -158,7 +158,7 @@ cd /path/to/BTCDecoded/commons
 ### Example 4: Single Repo Build
 ```bash
 cd /path/to/BTCDecoded/commons
-./tools/det_build.sh --repo ../consensus-proof
+./tools/det_build.sh --repo ../bllvm-consensus
 ```
 **Output:** Built repo with SHA256SUMS
 
@@ -166,11 +166,11 @@ cd /path/to/BTCDecoded/commons
 
 The scripts correctly handle dependency order:
 
-1. **consensus-proof** (no deps) - builds first
-2. **developer-sdk** (no deps) - builds in parallel with consensus-proof
-3. **protocol-engine** (needs consensus-proof) - builds after consensus-proof
-4. **reference-node** (needs protocol-engine + consensus-proof) - builds last
-5. **governance-app** (needs developer-sdk) - builds after developer-sdk
+1. **bllvm-consensus** (no deps) - builds first
+2. **bllvm-sdk** (no deps) - builds in parallel with bllvm-consensus
+3. **bllvm-protocol** (needs bllvm-consensus) - builds after bllvm-consensus
+4. **bllvm-node** (needs bllvm-protocol + bllvm-consensus) - builds last
+5. **governance-app** (needs bllvm-sdk) - builds after bllvm-sdk
 
 ## Comparison with CI/CD
 

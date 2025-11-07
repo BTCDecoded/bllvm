@@ -6,7 +6,7 @@ set -e
 echo "=== Formal Verification Coverage Report ==="
 echo ""
 
-cd "$(dirname "$0")/../consensus-proof" || exit 1
+cd "$(dirname "$0")/../bllvm-consensus" || exit 1
 
 echo "1. Kani Proofs:"
 kani_count=$(grep -r "kani::proof" src/ 2>/dev/null | wc -l || echo "0")

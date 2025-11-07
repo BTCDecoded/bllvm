@@ -13,10 +13,10 @@
    ```
    BTCDecoded/
    ├── commons/
-   ├── consensus-proof/
-   ├── protocol-engine/
-   ├── reference-node/
-   ├── developer-sdk/
+   ├── bllvm-consensus/
+   ├── bllvm-protocol/
+   ├── bllvm-node/
+   ├── bllvm-sdk/
    └── governance-app/
    ```
 
@@ -78,7 +78,7 @@ cd /path/to/BTCDecoded/commons
 
 After a successful build, you'll find:
 - **Binaries**: `commons/artifacts/binaries/`
-  - `reference-node`
+  - `bllvm-node`
   - `bllvm-keygen`, `bllvm-sign`, `bllvm-verify`
   - `governance-app`, `key-manager`, etc.
 

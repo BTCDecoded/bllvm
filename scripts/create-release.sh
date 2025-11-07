@@ -36,15 +36,15 @@ Release date: $(date -u +"%Y-%m-%d %H:%M:%S UTC")
 
 This release includes the following components:
 
-- **consensus-proof** - Direct mathematical implementation of Bitcoin consensus rules
-- **protocol-engine** - Bitcoin protocol abstraction layer
-- **reference-node** - Minimal Bitcoin node implementation
-- **developer-sdk** - Governance infrastructure and CLI tools
+- **bllvm-consensus** - Direct mathematical implementation of Bitcoin consensus rules
+- **bllvm-protocol** - Bitcoin protocol abstraction layer
+- **bllvm-node** - Minimal Bitcoin node implementation
+- **bllvm-sdk** - Governance infrastructure and CLI tools
 - **governance-app** - GitHub App for cryptographic governance enforcement
 
 ## Binaries Included
 
-- \`reference-node\` - Bitcoin reference node
+- \`bllvm-node\` - Bitcoin reference node
 - \`bllvm-keygen\` - Key generation tool
 - \`bllvm-sign\` - Message signing tool
 - \`bllvm-verify\` - Signature verification tool

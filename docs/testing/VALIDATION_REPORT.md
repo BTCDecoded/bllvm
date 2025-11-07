@@ -136,15 +136,15 @@
 **Dependency ordering verified:**
 
 ```
-consensus-proof (no deps)
+bllvm-consensus (no deps)
     ↓
-protocol-engine (depends on consensus-proof)
+bllvm-protocol (depends on bllvm-consensus)
     ↓
-reference-node (depends on protocol-engine + consensus-proof)
+bllvm-node (depends on bllvm-protocol + bllvm-consensus)
 
-developer-sdk (no deps)
+bllvm-sdk (no deps)
     ↓
-governance-app (depends on developer-sdk)
+governance-app (depends on bllvm-sdk)
 ```
 
 **Implementation:**

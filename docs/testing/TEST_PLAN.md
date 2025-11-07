@@ -9,7 +9,7 @@ This plan validates the system from the most foundational layer outward, running
   - `cargo check`
   - `cargo test --no-run`
 
-## Phase 1 — consensus-proof (L2)
+## Phase 1 — bllvm-consensus (L2)
 1) Unit tests
 - `cargo test --all-features --lib --tests` (no `-p` flag, repo is standalone)
 - Fix order: constants → types → economic → pow → transaction → block → script → segwit/taproot.
@@ -29,7 +29,7 @@ This plan validates the system from the most foundational layer outward, running
 5) Optional perf smoke
 - `cargo bench -- benches::*` (no `-p` flag)
 
-## Phase 2 — protocol-engine (L3)
+## Phase 2 — bllvm-protocol (L3)
 1) All tests
 - `cargo test --all-features` (no `-p` flag)
 - Validate FeatureRegistry activation; validation rules flow to L2.
@@ -37,7 +37,7 @@ This plan validates the system from the most foundational layer outward, running
 2) Variant coverage
 - Run with: BitcoinV1, Testnet3, Regtest contexts; verify expected accept/reject.
 
-## Phase 3 — reference-node (L4)
+## Phase 3 — bllvm-node (L4)
 1) Storage
 - `cargo test -- tests::storage_*` (no `-p` flag)
 
@@ -54,7 +54,7 @@ This plan validates the system from the most foundational layer outward, running
 5) QUIC smoke (feature-gated)
 - `cargo test --features quinn -- --ignored` (no `-p` flag)
 
-## Phase 4 — developer-sdk
+## Phase 4 — bllvm-sdk
 1) Build + unit tests
 - `cargo test --all-features` (no `-p` flag)
 

@@ -2,14 +2,14 @@
 
 ## Separation of Concerns
 - **commons**: Orchestration, policies, reusable workflows, shared tools, version topology.
-- **consensus-proof (L2)**: Consensus math + formal verification; publishes libraries and verification bundles.
-- **protocol-engine (L3)**: Protocol abstraction; depends on L2; publishes library.
-- **reference-node (L4)**: Node infra; depends on L2 & L3; publishes binaries.
+- **bllvm-consensus (L2)**: Consensus math + formal verification; publishes libraries and verification bundles.
+- **bllvm-protocol (L3)**: Protocol abstraction; depends on L2; publishes library.
+- **bllvm-node (L4)**: Node infra; depends on L2 & L3; publishes binaries.
 
 ## Build Order
-1. consensus-proof → verify (tests + optional Kani)
-2. protocol-engine → build lib
-3. reference-node → build binaries
+1. bllvm-consensus → verify (tests + optional Kani)
+2. bllvm-protocol → build lib
+3. bllvm-node → build binaries
 
 ## Version Topology
 - Authoritative map: `commons/versions.toml` (tags per repo).
