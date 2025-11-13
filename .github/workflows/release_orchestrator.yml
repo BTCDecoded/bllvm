@@ -8,6 +8,10 @@ on:
         required: false
         default: ''
 
+permissions:
+  contents: read
+  actions: read
+
 jobs:
   read-versions:
     runs-on: [self-hosted, linux, x64]
