@@ -38,13 +38,30 @@ jobs:
       - name: Checkout all repos at version
         run: |
           chmod +x commons/scripts/*.sh
-          commons/scripts/setup-build-env.sh --tag ${{ inputs.version_tag }}
+          commons/scripts/setup-build-env.sh ${{ inputs.version_tag }}
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.REPO_ACCESS_TOKEN }}
       
       - name: Build all repositories
         run: |
           commons/build.sh --mode release
+        env:
+          PARENT_DIR: ${{ github.workspace }}
+      
+      - name: Run tests
+        run: |
+          cd ${{ github.workspace }}
+          for repo in bllvm-consensus bllvm-protocol bllvm-node bllvm-sdk; do
+            if [ -d "$repo" ]; then
+              echo "Running tests in $repo..."
+              cd "$repo"
+              cargo test --release --all-features || {
+                echo "Tests failed in $repo"
+                exit 1
+              }
+              cd ..
+            fi
+          done
         env:
           PARENT_DIR: ${{ github.workspace }}
       
@@ -73,5 +90,5 @@ jobs:
           draft: false
           prerelease: ${{ contains(inputs.version_tag, '-') }}
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.REPO_ACCESS_TOKEN }}
 
