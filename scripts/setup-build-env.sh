@@ -39,9 +39,18 @@ clone_or_update_repo() {
             log_info "Checking out tag: ${TAG}"
             git fetch --tags
             git checkout "$TAG" 2>/dev/null || {
-                log_error "Tag ${TAG} not found in ${repo}"
-                popd > /dev/null
-                return 1
+                log_info "Tag ${TAG} not found in ${repo}, creating from main..."
+                git checkout main 2>/dev/null || git checkout master 2>/dev/null
+                git pull origin main 2>/dev/null || git pull origin master 2>/dev/null || true
+                git tag -a "$TAG" -m "Release $TAG" || {
+                    log_error "Failed to create tag ${TAG} in ${repo}"
+                    popd > /dev/null
+                    return 1
+                }
+                git push origin "$TAG" 2>/dev/null || {
+                    log_warn "Tag ${TAG} created locally but failed to push (may need permissions)"
+                }
+                git checkout "$TAG"
             }
         else
             # Update to latest
@@ -65,10 +74,20 @@ clone_or_update_repo() {
         
         if [ -n "$TAG" ]; then
             pushd "$repo" > /dev/null
+            git fetch --tags
             git checkout "$TAG" 2>/dev/null || {
-                log_error "Tag ${TAG} not found in ${repo}"
-                popd > /dev/null
-                return 1
+                log_info "Tag ${TAG} not found in ${repo}, creating from main..."
+                git checkout main 2>/dev/null || git checkout master 2>/dev/null
+                git pull origin main 2>/dev/null || git pull origin master 2>/dev/null || true
+                git tag -a "$TAG" -m "Release $TAG" || {
+                    log_error "Failed to create tag ${TAG} in ${repo}"
+                    popd > /dev/null
+                    return 1
+                }
+                git push origin "$TAG" 2>/dev/null || {
+                    log_warn "Tag ${TAG} created locally but failed to push (may need permissions)"
+                }
+                git checkout "$TAG"
             }
             popd > /dev/null
         fi
