@@ -35,8 +35,8 @@ env:
 
 jobs:
   verify:
-    # Prefer runners with rust+kani labels when kani enabled, fallback to basic
-    runs-on: ${{ inputs.kani && 'self-hosted,linux,x64,rust,kani' || 'self-hosted,linux,x64,rust' }}
+    # Kani is installed dynamically, so we only need rust label
+    runs-on: self-hosted,linux,x64,rust
     timeout-minutes: ${{ inputs.timeout_minutes }}
     
     steps:

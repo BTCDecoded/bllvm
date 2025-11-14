@@ -43,7 +43,7 @@ jobs:
     uses: ./.github/workflows/verify_consensus_cached.yml
     with:
       repo: consensus-proof
-      kani: false
+      kani: true
       ref: ${{ needs.read-versions.outputs.cp }}
       use_cache: true
       timeout_minutes: 120
