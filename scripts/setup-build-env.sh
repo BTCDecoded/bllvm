@@ -34,26 +34,30 @@ clone_or_update_repo() {
         log_info "Repository exists: ${repo}"
         pushd "$repo_path" > /dev/null
         
+        # Always fetch latest changes first
+        log_info "Fetching latest changes..."
+        git fetch origin
+        git fetch --tags
+        
         # Update if tag specified
         if [ -n "$TAG" ]; then
             log_info "Checking out tag: ${TAG}"
-            git fetch --tags
-            git checkout "$TAG" 2>/dev/null || {
-                log_info "Tag ${TAG} not found in ${repo}, creating from main..."
+            # Try to checkout tag, but if it doesn't exist or is outdated, use main
+            if git rev-parse --verify "$TAG" >/dev/null 2>&1; then
+                git checkout "$TAG"
+                # For Phase 1 prerelease, always use latest main to get bug fixes
+                # TODO: In Phase 2, use exact tag versions for deterministic builds
+                log_info "Tag ${TAG} found, but using latest main for Phase 1 prerelease (bug fixes)"
                 git checkout main 2>/dev/null || git checkout master 2>/dev/null
                 git pull origin main 2>/dev/null || git pull origin master 2>/dev/null || true
-                git tag -a "$TAG" -m "Release $TAG" || {
-                    log_error "Failed to create tag ${TAG} in ${repo}"
-                    popd > /dev/null
-                    return 1
-                }
-                git push origin "$TAG" 2>/dev/null || {
-                    log_warn "Tag ${TAG} created locally but failed to push (may need permissions)"
-                }
-                git checkout "$TAG"
+            else
+                log_info "Tag ${TAG} not found in ${repo}, using latest main..."
+                git checkout main 2>/dev/null || git checkout master 2>/dev/null
+                git pull origin main 2>/dev/null || git pull origin master 2>/dev/null || true
             }
         else
             # Update to latest
+            git checkout main 2>/dev/null || git checkout master 2>/dev/null
             git pull origin main 2>/dev/null || git pull origin master 2>/dev/null || true
         fi
         
