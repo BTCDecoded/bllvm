@@ -119,7 +119,7 @@ jobs:
       
       - name: Install Windows target for cross-compilation
         run: |
-          rustup target add x86_64-pc-windows-msvc
+          rustup target add x86_64-pc-windows-gnu
           # Install mingw-w64 for linking (required for cross-compilation)
           # Note: This may require additional system packages on the runner
           echo "Windows target installed"
@@ -143,8 +143,11 @@ jobs:
             if [ -d "$repo" ]; then
               echo "Building $repo for Windows..."
               cd "$repo"
+              # Unset CC/CXX to use default MinGW toolchain for Windows GNU target
+              # The CC=ccache gcc is for Linux builds, not Windows
+              unset CC CXX || true
               # Omit --jobs flag to use all available CPU cores
-              cargo build --release --target x86_64-pc-windows-msvc --all-features || {
+              cargo build --release --target x86_64-pc-windows-gnu --all-features || {
                 echo "Windows build failed for $repo (continuing...)"
               }
               cd ..

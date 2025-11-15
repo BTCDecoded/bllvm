@@ -13,13 +13,13 @@ PLATFORM="${1:-linux-x86_64}"
 
 # Determine target directory and binary extension based on platform
 if [[ "$PLATFORM" == *"windows"* ]]; then
-    TARGET_DIR="target/x86_64-pc-windows-msvc/release"
+    TARGET_DIR="target/x86_64-pc-windows-gnu/release"
     BIN_EXT=".exe"
     BINARIES_DIR="${ARTIFACTS_DIR}/binaries-windows"
 else
     TARGET_DIR="target/release"
     BIN_EXT=""
-BINARIES_DIR="${ARTIFACTS_DIR}/binaries"
+    BINARIES_DIR="${ARTIFACTS_DIR}/binaries"
 fi
 
 # Binary mapping
