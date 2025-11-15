@@ -22,7 +22,7 @@ permissions:
 jobs:
   verify-versions:
     name: Verify Version Compatibility
-    runs-on: [self-hosted, linux, x64]
+    runs-on: [self-hosted, Linux, X64]
     
     steps:
       - name: Checkout commons

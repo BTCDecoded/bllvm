@@ -45,7 +45,7 @@ env:
 jobs:
   docker:
     # Prefer runners with docker label, fallback to basic (setup-docker can install)
-    runs-on: self-hosted,linux,x64,docker
+    runs-on: self-hosted,Linux,X64,docker
     timeout-minutes: ${{ inputs.timeout_minutes }}
     steps:
       - name: Emergency disk space check

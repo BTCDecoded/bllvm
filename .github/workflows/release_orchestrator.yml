@@ -15,7 +15,7 @@ permissions:
 
 jobs:
   read-versions:
-    runs-on: [self-hosted, linux, x64]
+    runs-on: [self-hosted, Linux, X64]
     outputs:
       cp: ${{ steps.parse.outputs.cp }}
       pe: ${{ steps.parse.outputs.pe }}
@@ -102,7 +102,7 @@ jobs:
 
   deploy-signal:
     needs: build-governance-app-image
-    runs-on: [self-hosted, linux, x64]
+    runs-on: [self-hosted, Linux, X64]
     steps:
       - name: Send deployment signal to governance-app self-hosted runner
         uses: actions/github-script@v7
