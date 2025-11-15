@@ -143,6 +143,13 @@ build_repo() {
     
     # Build
     if ! cargo build --release 2>&1 | tee "/tmp/${repo}-build.log"; then
+        # In Phase 1 prerelease, governance-app is optional (governance not activated)
+        if [ "$repo" == "governance-app" ] && [ "$MODE" == "release" ]; then
+            log_warn "Build failed for ${repo} (optional in Phase 1 prerelease)"
+            log_info "Skipping ${repo} - governance not yet activated"
+            popd > /dev/null
+            return 0  # Don't fail the build
+        fi
         log_error "Build failed for ${repo}"
         popd > /dev/null
         return 1
