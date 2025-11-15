@@ -1,0 +1,103 @@
+name: Build Single Repository
+
+on:
+  workflow_call:
+    inputs:
+      repo-name:
+        description: 'Repository name to build'
+        required: true
+        type: string
+      required-deps:
+        description: 'Comma-separated list of required dependencies'
+        required: false
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  build-single:
+    name: Build ${{ inputs.repo-name }}
+    runs-on: [self-hosted, Linux, X64]
+    
+    steps:
+      - name: Checkout commons
+        uses: actions/checkout@v4
+        with:
+          repository: BTCDecoded/commons
+          path: commons
+      
+      - name: Checkout target repository
+        uses: actions/checkout@v4
+        with:
+          repository: BTCDecoded/${{ inputs.repo-name }}
+          path: ${{ inputs.repo-name }}
+      
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      
+      - name: Cache cargo dependencies
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            ${{ inputs.repo-name }}/target
+          key: ${{ runner.os }}-${{ inputs.repo-name }}-${{ hashFiles(format('{0}/Cargo.lock', inputs.repo-name)) }}
+          restore-keys: |
+            ${{ runner.os }}-${{ inputs.repo-name }}-
+      
+      - name: Checkout dependencies
+        if: inputs.required-deps != ''
+        run: |
+          chmod +x commons/scripts/*.sh
+          # Checkout each dependency
+          IFS=',' read -ra DEPS <<< "${{ inputs.required-deps }}"
+          for dep in "${DEPS[@]}"; do
+            echo "Checking out dependency: $dep"
+            git clone "https://github.com/BTCDecoded/${dep}.git" "../${dep}" || true
+          done
+        env:
+          GITHUB_TOKEN: ${{ secrets.REPO_ACCESS_TOKEN }}
+      
+      - name: Build repository
+        working-directory: ${{ inputs.repo-name }}
+        run: |
+          cargo build --release --verbose
+      
+      - name: Run tests
+        working-directory: ${{ inputs.repo-name }}
+        run: |
+          cargo test --release --verbose
+      
+      - name: Collect binaries
+        if: contains(fromJSON('["reference-node", "developer-sdk", "governance-app"]'), inputs.repo-name)
+        run: |
+          mkdir -p artifacts/binaries
+          # Copy binaries based on repo
+          case "${{ inputs.repo-name }}" in
+            reference-node)
+              cp ${{ inputs.repo-name }}/target/release/reference-node artifacts/binaries/ 2>/dev/null || true
+              ;;
+            developer-sdk)
+              cp ${{ inputs.repo-name }}/target/release/btcdecoded-* artifacts/binaries/ 2>/dev/null || true
+              ;;
+            governance-app)
+              cp ${{ inputs.repo-name }}/target/release/governance-app artifacts/binaries/ 2>/dev/null || true
+              cp ${{ inputs.repo-name }}/target/release/key-manager artifacts/binaries/ 2>/dev/null || true
+              cp ${{ inputs.repo-name }}/target/release/test-content-hash* artifacts/binaries/ 2>/dev/null || true
+              ;;
+          esac
+      
+      - name: Upload artifacts
+        if: contains(fromJSON('["reference-node", "developer-sdk", "governance-app"]'), inputs.repo-name)
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.repo-name }}-binaries
+          path: artifacts/
+          retention-days: 30
+

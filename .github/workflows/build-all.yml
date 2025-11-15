@@ -1,0 +1,75 @@
+name: Build All Repositories
+
+on:
+  workflow_call:
+    inputs:
+      mode:
+        description: 'Build mode (dev or release)'
+        required: false
+        default: 'dev'
+        type: string
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'Build mode'
+        required: false
+        default: 'dev'
+        type: choice
+        options:
+          - dev
+          - release
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  build-all:
+    name: Build All Repositories
+    runs-on: [self-hosted, Linux, X64]
+    
+    steps:
+      - name: Checkout commons
+        uses: actions/checkout@v4
+        with:
+          repository: BTCDecoded/commons
+          path: commons
+      
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      
+      - name: Cache cargo dependencies
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ runner.os }}-cargo-${{ hashFiles('commons/versions.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+      
+      - name: Setup build environment
+        run: |
+          chmod +x commons/scripts/*.sh
+          commons/scripts/setup-build-env.sh
+        env:
+          GITHUB_TOKEN: ${{ secrets.REPO_ACCESS_TOKEN }}
+      
+      - name: Build all repositories
+        run: |
+          commons/build.sh --mode ${{ inputs.mode || 'dev' }}
+        env:
+          PARENT_DIR: ${{ github.workspace }}
+      
+      - name: Collect artifacts
+        run: commons/scripts/collect-artifacts.sh
+      
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: all-binaries
+          path: commons/artifacts/
+          retention-days: 30
+

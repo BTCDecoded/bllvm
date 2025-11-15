@@ -1,0 +1,26 @@
+# Version Coordination Manifest for Bitcoin Commons Ecosystem
+# Tracks compatible versions across all repositories
+# Managed by BTCDecoded organization
+#
+# Format:
+# [versions]
+# repo-name = { version = "...", git_tag = "...", git_commit = "...", requires = [...], binaries = [...] }
+
+[versions]
+
+# Libraries (no binaries)
+bllvm-consensus = { version = "0.1.0", git_tag = "v0.1.0", git_commit = "" }
+bllvm-protocol = { version = "0.1.0", git_tag = "v0.1.0", git_commit = "", requires = ["bllvm-consensus=0.1.0"] }
+
+# Binaries
+bllvm-node = { version = "0.1.0", git_tag = "v0.1.0", git_commit = "", requires = ["bllvm-protocol=0.1.0", "bllvm-consensus=0.1.0"] }
+bllvm = { version = "0.1.0", git_tag = "v0.1.0", git_commit = "", requires = ["bllvm-node=0.1.0"], binaries = ["bllvm"] }
+bllvm-sdk = { version = "0.1.0", git_tag = "v0.1.0", git_commit = "", binaries = ["bllvm-keygen", "bllvm-sign", "bllvm-verify"] }
+governance-app = { version = "0.1.0", git_tag = "v0.1.0", git_commit = "", requires = ["bllvm-sdk=0.1.0"], binaries = ["governance-app", "key-manager", "test-content-hash", "test-content-hash-standalone"] }
+
+# Metadata
+[metadata]
+last_updated = "2025-01-XX"
+updated_by = "System Review"
+release_notes = "Initial version coordination for Bitcoin Commons v0.1.0 release set"
+

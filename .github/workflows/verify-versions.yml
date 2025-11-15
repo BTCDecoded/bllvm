@@ -1,0 +1,46 @@
+name: Verify Versions
+
+on:
+  workflow_call:
+    inputs:
+      repo-name:
+        description: 'Repository name to verify'
+        required: false
+        type: string
+        default: ''
+  workflow_dispatch:
+    inputs:
+      repo-name:
+        description: 'Repository name to verify (empty for all)'
+        required: false
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+
+jobs:
+  verify-versions:
+    name: Verify Version Compatibility
+    runs-on: [self-hosted, Linux, X64]
+    
+    steps:
+      - name: Checkout commons
+        uses: actions/checkout@v4
+        with:
+          repository: BTCDecoded/commons
+          path: commons
+      
+      - name: Verify versions
+        run: |
+          chmod +x commons/scripts/verify-versions.sh
+          if [ -n "${{ inputs.repo-name }}" ]; then
+            commons/scripts/verify-versions.sh ${{ inputs.repo-name }}
+          else
+            commons/scripts/verify-versions.sh
+          fi
+      
+      - name: Report results
+        run: |
+          echo "Version verification complete"
+

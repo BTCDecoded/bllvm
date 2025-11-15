@@ -1,0 +1,48 @@
+version: '3.8'
+
+# Docker Compose configuration for building BTCDecoded ecosystem
+# Usage: docker-compose -f docker-compose.build.yml build
+
+services:
+  # Build consensus-proof (library only)
+  consensus-proof:
+    build:
+      context: ../consensus-proof
+      dockerfile: Dockerfile
+    image: btcdecoded/consensus-proof:latest
+    
+  # Build protocol-engine (library only, depends on consensus-proof)
+  protocol-engine:
+    build:
+      context: ../protocol-engine
+      dockerfile: Dockerfile
+    image: btcdecoded/protocol-engine:latest
+    depends_on:
+      - consensus-proof
+    
+  # Build reference-node (binary)
+  reference-node:
+    build:
+      context: ../reference-node
+      dockerfile: Dockerfile
+    image: btcdecoded/reference-node:latest
+    depends_on:
+      - consensus-proof
+      - protocol-engine
+    
+  # Build developer-sdk (CLI binaries)
+  developer-sdk:
+    build:
+      context: ../developer-sdk
+      dockerfile: Dockerfile
+    image: btcdecoded/developer-sdk:latest
+    
+  # Build governance-app (binaries)
+  governance-app:
+    build:
+      context: ../governance-app
+      dockerfile: Dockerfile
+    image: btcdecoded/governance-app:latest
+    depends_on:
+      - developer-sdk
+

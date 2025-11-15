@@ -1,0 +1,24 @@
+# Artifacts
+artifacts/
+*.tar.gz
+*.zip
+SHA256SUMS
+
+# Temporary files
+*.log
+*.tmp
+
+# Build artifacts (when testing locally)
+target/
+
+# Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+

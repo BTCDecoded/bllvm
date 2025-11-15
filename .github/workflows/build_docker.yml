@@ -1,0 +1,133 @@
+name: Build Docker Image (Reusable)
+
+on:
+  workflow_call:
+    inputs:
+      repo:
+        required: true
+        type: string
+      context:
+        required: false
+        type: string
+        default: .
+      image_name:
+        required: false
+        type: string
+        default: governance-app
+      push:
+        required: false
+        type: boolean
+        default: false
+      ref:
+        required: true
+        type: string
+      tag:
+        required: true
+        type: string
+      timeout_minutes:
+        required: false
+        type: number
+        default: 30
+      use_cache:
+        required: false
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+  packages: write
+  actions: read
+
+env:
+  CI: 'true'
+  DOCKER_BUILDKIT: '1'
+
+jobs:
+  docker:
+    # Prefer runners with docker label, fallback to basic (setup-docker can install)
+    runs-on: self-hosted,Linux,X64,docker
+    timeout-minutes: ${{ inputs.timeout_minutes }}
+    steps:
+      - name: Emergency disk space check
+        run: |
+          echo "🔍 DEBUG: Disk space before setup:"
+          df -h
+          if [ $(df / | tail -1 | awk '{print $5}' | sed 's/%//') -gt 80 ]; then
+            echo "⚠️ Disk space >80%, cleaning old caches..."
+            find /tmp/runner-cache -maxdepth 2 -type d -mtime +7 -exec rm -rf {} + 2>/dev/null || true
+            docker system prune -f || true
+            echo "🔍 DEBUG: Disk space after cleanup:"
+            df -h
+          fi
+
+      - name: Checkout target repository
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/${{ inputs.repo }}
+          ref: ${{ inputs.ref }}
+
+      - name: Setup local cache system (for source)
+        if: ${{ inputs.use_cache }}
+        id: setup-cache
+        run: |
+          CACHE_ROOT="/tmp/runner-cache"
+          DEPS_KEY=$(sha256sum Cargo.lock 2>/dev/null | cut -d' ' -f1 || echo "no-cargo")
+          CACHE_KEY="${DEPS_KEY}-docker"
+          
+          CARGO_CACHE_DIR="$CACHE_ROOT/cargo/$CACHE_KEY"
+          echo "CARGO_CACHE_DIR=$CARGO_CACHE_DIR" >> $GITHUB_ENV
+          echo "cache-key=$CACHE_KEY" >> $GITHUB_OUTPUT
+          mkdir -p "$CARGO_CACHE_DIR"/{registry,git}
+          
+          echo "🔍 DEBUG: Cache setup complete for Docker build"
+
+      - name: Restore Cargo cache (for source builds)
+        if: ${{ inputs.use_cache }}
+        run: |
+          if [ -d "$CARGO_CACHE_DIR/registry" ] && [ "$(ls -A $CARGO_CACHE_DIR/registry 2>/dev/null)" ]; then
+            echo "🚀 Restoring Cargo registry for Docker build..."
+            mkdir -p "$HOME/.cargo/registry"
+            rsync -a --delete "$CARGO_CACHE_DIR/registry/" "$HOME/.cargo/registry/" || true
+            echo "CARGO_REGISTRY_RESTORED=true" >> $GITHUB_ENV
+          fi
+
+      - name: Set up QEMU (optional)
+        if: ${{ inputs.push }}
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to registry (optional)
+        if: ${{ inputs.push }}
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ secrets.DOCKER_REGISTRY || 'ghcr.io' }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build image
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ inputs.context }}
+          push: ${{ inputs.push }}
+          tags: |
+            ${{ secrets.DOCKER_REGISTRY || 'ghcr.io' }}/${{ github.repository_owner }}/${{ inputs.image_name }}:${{ inputs.tag }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Cache Cargo registry (for source builds)
+        if: ${{ inputs.use_cache && always() && env.CARGO_REGISTRY_RESTORED != 'true' }}
+        run: |
+          if [ -d "$HOME/.cargo/registry" ]; then
+            rsync -a --delete "$HOME/.cargo/registry/" "$CARGO_CACHE_DIR/registry/" || true
+            echo "✅ Cargo registry cached for Docker builds"
+          fi
+
+      - name: Cache cleanup management
+        if: always()
+        run: |
+          echo "🧹 Cleaning up old caches..."
+          CACHE_ROOT="/tmp/runner-cache"
+          find "$CACHE_ROOT/cargo" -maxdepth 1 -type d -mtime +1 2>/dev/null | head -n -5 | xargs rm -rf 2>/dev/null || true
+          echo "✅ Cache cleanup completed"
