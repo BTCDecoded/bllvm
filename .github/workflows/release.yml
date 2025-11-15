@@ -96,12 +96,18 @@ jobs:
               # Skip tests that hang in CI environment
               # Use timeout command to prevent hanging tests (30 min total per repo)
               # Run tests with single thread to avoid resource contention
-              timeout 1800 cargo test --release --all-features --lib --bins --tests -- --test-threads=1 --skip test_handle_incoming_wire_tcp_enqueues_pkgtxn || {
+              # Skip tests that hang in CI - use filter to exclude them
+              # The test was removed but --skip is harmless if test doesn't exist
+              timeout 1800 cargo test --release --all-features --lib --bins --tests -- --test-threads=1 --skip test_handle_incoming_wire_tcp_enqueues_pkgtxn 2>&1 | tee /tmp/test_output.log || {
                 EXIT_CODE=$?
                 if [ $EXIT_CODE -eq 124 ]; then
                   echo "Tests timed out in $repo (exceeded 30 minutes)"
+                  echo "Last 50 lines of test output:"
+                  tail -50 /tmp/test_output.log || true
                 else
                   echo "Tests failed in $repo"
+                  echo "Last 50 lines of test output:"
+                  tail -50 /tmp/test_output.log || true
                 fi
                 exit 1
               }
