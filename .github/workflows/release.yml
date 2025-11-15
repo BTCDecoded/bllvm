@@ -31,11 +31,19 @@ jobs:
           path: commons
       
       - name: Setup Rust toolchain
-        uses: actions-rs/toolchain@v1
+        uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: stable
           components: rustfmt, clippy
-          override: true
+      
+      - name: Fix corrupted cargo dependencies
+        run: |
+          # Update cargo to latest version
+          rustup update cargo || true
+          # Remove corrupted cc crate and force re-download
+          find ~/.cargo/registry -path "*/cc-1.2.41*" -type d -exec rm -rf {} + 2>/dev/null || true
+          find ~/.cargo/registry -path "*/cc-1.2.46*" -type d -exec rm -rf {} + 2>/dev/null || true
+          # Clean cargo cache
+          cargo clean || true
       
       - name: Checkout all repos at version
         run: |

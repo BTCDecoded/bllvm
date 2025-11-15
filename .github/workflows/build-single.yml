@@ -36,11 +36,9 @@ jobs:
           path: ${{ inputs.repo-name }}
       
       - name: Setup Rust toolchain
-        uses: actions-rs/toolchain@v1
+        uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: stable
           components: rustfmt, clippy
-          override: true
       
       - name: Cache cargo dependencies
         uses: actions/cache@v3
