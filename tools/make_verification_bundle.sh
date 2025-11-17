@@ -108,4 +108,59 @@ else
   echo "OpenTimestamps (ots) not installed; skipping timestamp."
 fi
 
+# Generate bundle metadata JSON
+echo "=== Generating bundle metadata ==="
+BUNDLE_METADATA="${BUNDLE_PATH%.tar.gz}.json"
+SOURCE_HASH=""
+if command -v git >/dev/null 2>&1; then
+  ( cd "${CP_REPO}" && SOURCE_HASH=$(git rev-parse HEAD) ) || SOURCE_HASH=""
+fi
+
+# Create metadata JSON
+cat > "${BUNDLE_METADATA}" <<EOF
+{
+  "version": "1.0",
+  "bundle_type": "consensus-proof",
+  "created_at": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
+  "source_repo": "$(basename "${CP_REPO}")",
+  "source_commit": "${SOURCE_HASH}",
+  "source_hash": "${SOURCE_HASH}",
+  "bundle_hash": "$(grep -o '^[a-f0-9]*' "${BUNDLE_PATH}.sha256" 2>/dev/null || echo "")",
+  "verification_results": {
+    "tests": {
+      "status": "$(grep -q "test result: ok" "${OUT_DIR}/tests.log" 2>/dev/null && echo "passed" || echo "unknown")",
+      "log_file": "tests.log"
+    },
+    "kani": {
+      "status": "$(grep -q "VERIFICATION SUCCESSFUL" "${OUT_DIR}/kani.log" 2>/dev/null && echo "verified" || echo "unknown")",
+      "log_file": "kani.log"
+    }
+  },
+  "artifacts": {
+    "bundle_archive": "$(basename "${BUNDLE_PATH}")",
+    "checksum_file": "$(basename "${BUNDLE_PATH}.sha256")"
+  }
+}
+EOF
+
+echo "Bundle metadata: ${BUNDLE_METADATA}"
+
+# Optional: Sign bundle metadata if bllvm-sign-binary is available
+if command -v bllvm-sign-binary >/dev/null 2>&1 && [[ -n "${BLLVM_SIGN_KEY:-}" ]]; then
+  echo "=== Signing bundle metadata ==="
+  BUNDLE_SIG="${BUNDLE_METADATA}.sig"
+  if bllvm-sign-binary bundle \
+    --file "${BUNDLE_PATH}" \
+    --source-hash "${SOURCE_HASH}" \
+    --key "${BLLVM_SIGN_KEY}" \
+    --output "${BUNDLE_SIG}" 2>/dev/null; then
+    echo "Bundle signed: ${BUNDLE_SIG}"
+  else
+    echo "Warning: Failed to sign bundle metadata (key may not be set)"
+  fi
+else
+  echo "Note: Bundle metadata not signed (set BLLVM_SIGN_KEY to enable signing)"
+fi
+
 echo "Done. Bundle: ${BUNDLE_PATH}"
+echo "Metadata: ${BUNDLE_METADATA}"
