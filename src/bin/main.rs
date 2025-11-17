@@ -3,11 +3,12 @@
 //! Main entry point for the Bitcoin Commons BLLVM node binary.
 //! This binary starts a full Bitcoin node using the bllvm-node library.
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use bllvm_node::config::NodeConfig;
 use bllvm_node::node::Node as ReferenceNode;
 use bllvm_node::ProtocolVersion;
-use clap::{Parser, ValueEnum};
+use clap::{Parser, Subcommand, ValueEnum};
+use serde_json::{json, Value};
 use std::env;
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
@@ -18,6 +19,9 @@ use tracing::{error, info, warn};
 #[command(name = "bllvm")]
 #[command(about = "Bitcoin Commons BLLVM - Bitcoin Low-Level Virtual Machine Node", long_about = None)]
 struct Cli {
+    #[command(subcommand)]
+    command: Option<Command>,
+
     /// Network to connect to
     #[arg(short, long, value_enum, default_value = "regtest")]
     network: Network,
@@ -49,6 +53,79 @@ struct Cli {
     /// Advanced configuration options
     #[command(flatten)]
     advanced: AdvancedConfig,
+}
+
+#[derive(Subcommand)]
+enum Command {
+    /// Start the node (default)
+    Start,
+    /// Show comprehensive node status
+    Status {
+        /// RPC server address (overrides config)
+        #[arg(long)]
+        rpc_addr: Option<SocketAddr>,
+    },
+    /// Health check (exit code 0 if healthy)
+    Health {
+        /// RPC server address (overrides config)
+        #[arg(long)]
+        rpc_addr: Option<SocketAddr>,
+    },
+    /// Show version and build information
+    Version,
+    /// Show blockchain information
+    Chain {
+        /// RPC server address (overrides config)
+        #[arg(long)]
+        rpc_addr: Option<SocketAddr>,
+    },
+    /// Show connected peers
+    Peers {
+        /// RPC server address (overrides config)
+        #[arg(long)]
+        rpc_addr: Option<SocketAddr>,
+    },
+    /// Show network information
+    Network {
+        /// RPC server address (overrides config)
+        #[arg(long)]
+        rpc_addr: Option<SocketAddr>,
+    },
+    /// Show sync status
+    Sync {
+        /// RPC server address (overrides config)
+        #[arg(long)]
+        rpc_addr: Option<SocketAddr>,
+    },
+    /// Configuration management
+    Config {
+        #[command(subcommand)]
+        subcommand: ConfigCommand,
+    },
+    /// Direct RPC call
+    Rpc {
+        /// RPC method name
+        method: String,
+        /// RPC parameters (JSON array)
+        #[arg(default_value = "[]")]
+        params: String,
+        /// RPC server address (overrides config)
+        #[arg(long)]
+        rpc_addr: Option<SocketAddr>,
+    },
+}
+
+#[derive(Subcommand)]
+enum ConfigCommand {
+    /// Show loaded configuration
+    Show,
+    /// Validate configuration file
+    Validate {
+        /// Configuration file path
+        path: Option<PathBuf>,
+    },
+    /// Show configuration file path
+    Path,
 }
 
 #[derive(Parser, Debug, Clone, Default)]
@@ -132,7 +209,7 @@ impl From<Network> for ProtocolVersion {
 async fn main() -> Result<()> {
     let cli = Cli::parse();
 
-    // Initialize tracing
+    // Initialize tracing (minimal for subcommands, full for start)
     let filter = if cli.verbose {
         "bllvm=debug,bllvm_node=debug"
     } else {
@@ -146,58 +223,102 @@ async fn main() -> Result<()> {
         )
         .init();
 
-    // Build final configuration with hierarchy: CLI > ENV > Config > Defaults
-    let (config, data_dir, listen_addr, rpc_addr, network) = build_final_config(&cli);
-    
-    info!("Starting Bitcoin Commons BLLVM Node");
-    info!("Network: {:?}", network);
-    info!("RPC address: {}", rpc_addr);
-    info!("P2P listen address: {}", listen_addr);
-    info!("Data directory: {}", data_dir);
-
-    // Set data directory environment variable
-    std::env::set_var("DATA_DIR", &data_dir);
-
-    // Create node with specified protocol version
-    let protocol_version: ProtocolVersion = network.into();
-    let mut node = match ReferenceNode::new(
-        &data_dir,
-        listen_addr,
-        rpc_addr,
-        Some(protocol_version),
-    ) {
-        Ok(node) => node,
-        Err(e) => {
-            error!("Failed to create node: {}", e);
-            return Err(e);
+    // Handle subcommands
+    match cli.command {
+        Some(Command::Status { rpc_addr }) => {
+            let rpc_addr = rpc_addr.unwrap_or(cli.rpc_addr);
+            let (config, _) = build_final_config(&cli);
+            handle_status(rpc_addr, &config).await
         }
-    };
-
-    // Apply configuration to node
-    node = node.with_config(config.clone());
-    
-    // Apply module configuration if enabled
-    if let Err(e) = node.with_modules_from_config(&config) {
-        warn!("Failed to configure modules: {}. Continuing without modules.", e);
-    }
-    
-    // Note: Some features may require compile-time flags and cannot be changed at runtime
-
-    // Run node and signal handler concurrently
-    tokio::select! {
-        result = node.start() => {
-            if let Err(e) = result {
-                error!("Node error: {}", e);
-                return Err(e);
+        Some(Command::Health { rpc_addr }) => {
+            let rpc_addr = rpc_addr.unwrap_or(cli.rpc_addr);
+            let (config, _) = build_final_config(&cli);
+            handle_health(rpc_addr, &config).await
+        }
+        Some(Command::Version) => handle_version(),
+        Some(Command::Chain { rpc_addr }) => {
+            let rpc_addr = rpc_addr.unwrap_or(cli.rpc_addr);
+            let (config, _) = build_final_config(&cli);
+            handle_chain(rpc_addr, &config).await
+        }
+        Some(Command::Peers { rpc_addr }) => {
+            let rpc_addr = rpc_addr.unwrap_or(cli.rpc_addr);
+            let (config, _) = build_final_config(&cli);
+            handle_peers(rpc_addr, &config).await
+        }
+        Some(Command::Network { rpc_addr }) => {
+            let rpc_addr = rpc_addr.unwrap_or(cli.rpc_addr);
+            let (config, _) = build_final_config(&cli);
+            handle_network(rpc_addr, &config).await
+        }
+        Some(Command::Sync { rpc_addr }) => {
+            let rpc_addr = rpc_addr.unwrap_or(cli.rpc_addr);
+            let (config, _) = build_final_config(&cli);
+            handle_sync(rpc_addr, &config).await
+        }
+        Some(Command::Config { subcommand }) => {
+            let (config, _) = build_final_config(&cli);
+            match subcommand {
+                ConfigCommand::Show => handle_config_show(&config),
+                ConfigCommand::Validate { path } => handle_config_validate(path, &cli.config),
+                ConfigCommand::Path => handle_config_path(&cli.config),
             }
         }
-        _ = signal::ctrl_c() => {
-            info!("Shutting down BLLVM node...");
-            info!("Node stopped");
+        Some(Command::Rpc { method, params, rpc_addr }) => {
+            let rpc_addr = rpc_addr.unwrap_or(cli.rpc_addr);
+            let (config, _) = build_final_config(&cli);
+            let params: Value = serde_json::from_str(&params)
+                .context("Invalid JSON parameters")?;
+            handle_rpc(rpc_addr, &method, params, &config).await
+        }
+        None | Some(Command::Start) => {
+            // Start node (default behavior)
+            let (config, data_dir, listen_addr, rpc_addr, network) = build_final_config(&cli);
+            
+            info!("Starting Bitcoin Commons BLLVM Node");
+            info!("Network: {:?}", network);
+            info!("RPC address: {}", rpc_addr);
+            info!("P2P listen address: {}", listen_addr);
+            info!("Data directory: {}", data_dir);
+
+            std::env::set_var("DATA_DIR", &data_dir);
+
+            let protocol_version: ProtocolVersion = network.into();
+            let mut node = match ReferenceNode::new(
+                &data_dir,
+                listen_addr,
+                rpc_addr,
+                Some(protocol_version),
+            ) {
+                Ok(node) => node,
+                Err(e) => {
+                    error!("Failed to create node: {}", e);
+                    return Err(e);
+                }
+            };
+
+            node = node.with_config(config.clone());
+            
+            if let Err(e) = node.with_modules_from_config(&config) {
+                warn!("Failed to configure modules: {}. Continuing without modules.", e);
+            }
+
+            tokio::select! {
+                result = node.start() => {
+                    if let Err(e) = result {
+                        error!("Node error: {}", e);
+                        return Err(e);
+                    }
+                }
+                _ = signal::ctrl_c() => {
+                    info!("Shutting down BLLVM node...");
+                    info!("Node stopped");
+                }
+            }
+
+            Ok(())
         }
     }
-
-    Ok(())
 }
 
 /// Environment variable overrides
@@ -590,5 +711,248 @@ fn apply_feature_flags(config: &mut NodeConfig, features: &FeatureFlags) {
             warn!("Sigop feature not compiled in. Rebuild with --features sigop to enable.");
         }
     }
+}
+
+// RPC client helper
+async fn rpc_call(rpc_addr: SocketAddr, method: &str, params: Value) -> Result<Value> {
+    rpc_call_with_auth(rpc_addr, method, params, None, None).await
+}
+
+async fn rpc_call_with_auth(
+    rpc_addr: SocketAddr,
+    method: &str,
+    params: Value,
+    user: Option<&str>,
+    password: Option<&str>,
+) -> Result<Value> {
+    let url = format!("http://{}", rpc_addr);
+    let client = reqwest::Client::new();
+    
+    let request = json!({
+        "jsonrpc": "2.0",
+        "method": method,
+        "params": params,
+        "id": 1
+    });
+
+    let mut req = client.post(&url).json(&request);
+    
+    // Use provided credentials or defaults
+    let rpc_user = user.unwrap_or("btc");
+    let rpc_password = password.unwrap_or("");
+    req = req.basic_auth(rpc_user, Some(rpc_password));
+
+    let response = req
+        .send()
+        .await
+        .context("Failed to connect to RPC server")?;
+
+    let status = response.status();
+    if !status.is_success() {
+        anyhow::bail!("RPC request failed with status: {}", status);
+    }
+
+    let json: Value = response.json().await.context("Failed to parse RPC response")?;
+    
+    if let Some(error) = json.get("error") {
+        anyhow::bail!("RPC error: {}", error);
+    }
+
+    json.get("result")
+        .cloned()
+        .ok_or_else(|| anyhow::anyhow!("No result in RPC response"))
+}
+
+// Subcommand handlers
+async fn handle_status(rpc_addr: SocketAddr, _config: &NodeConfig) -> Result<()> {
+    let chain_info = rpc_call(rpc_addr, "getblockchaininfo", json!([])).await?;
+    let network_info = rpc_call(rpc_addr, "getnetworkinfo", json!([])).await?;
+    let peer_info = rpc_call(rpc_addr, "getpeerinfo", json!([])).await?;
+
+    println!("=== Node Status ===");
+    println!("Block Height: {}", chain_info.get("blocks").and_then(|v| v.as_u64()).unwrap_or(0));
+    println!("Chain: {}", chain_info.get("chain").and_then(|v| v.as_str()).unwrap_or("unknown"));
+    println!("Verification Progress: {:.2}%", 
+        chain_info.get("verificationprogress").and_then(|v| v.as_f64()).unwrap_or(0.0) * 100.0);
+    println!("Connected Peers: {}", peer_info.as_array().map(|a| a.len()).unwrap_or(0));
+    println!("Network Active: {}", network_info.get("networkactive").and_then(|v| v.as_bool()).unwrap_or(false));
+    
+    Ok(())
+}
+
+async fn handle_health(rpc_addr: SocketAddr, _config: &NodeConfig) -> Result<()> {
+    match rpc_call(rpc_addr, "getblockchaininfo", json!([])).await {
+        Ok(_) => {
+            println!("✅ Node is healthy");
+            Ok(())
+        }
+        Err(e) => {
+            eprintln!("❌ Health check failed: {}", e);
+            std::process::exit(1);
+        }
+    }
+}
+
+fn handle_version() -> Result<()> {
+    println!("BLLVM {}", env!("CARGO_PKG_VERSION"));
+    println!("Repository: {}", env!("CARGO_PKG_REPOSITORY"));
+    
+    // Try to get git info if available
+    if let Ok(sha) = std::process::Command::new("git")
+        .args(["rev-parse", "--short", "HEAD"])
+        .output()
+    {
+        if let Ok(sha_str) = String::from_utf8(sha.stdout) {
+            println!("Git: {}", sha_str.trim());
+        }
+    }
+    
+    // Show enabled features
+    println!("\nFeatures:");
+    #[cfg(feature = "utxo-commitments")] println!("  ✓ utxo-commitments");
+    #[cfg(feature = "dandelion")] println!("  ✓ dandelion");
+    #[cfg(feature = "ctv")] println!("  ✓ ctv");
+    #[cfg(feature = "stratum-v2")] println!("  ✓ stratum-v2");
+    #[cfg(feature = "bip158")] println!("  ✓ bip158");
+    #[cfg(feature = "sigop")] println!("  ✓ sigop");
+    
+    Ok(())
+}
+
+async fn handle_chain(rpc_addr: SocketAddr, _config: &NodeConfig) -> Result<()> {
+    let info = rpc_call(rpc_addr, "getblockchaininfo", json!([])).await?;
+    
+    println!("=== Blockchain Information ===");
+    println!("Chain: {}", info.get("chain").and_then(|v| v.as_str()).unwrap_or("unknown"));
+    println!("Blocks: {}", info.get("blocks").and_then(|v| v.as_u64()).unwrap_or(0));
+    println!("Headers: {}", info.get("headers").and_then(|v| v.as_u64()).unwrap_or(0));
+    if let Some(hash) = info.get("bestblockhash").and_then(|v| v.as_str()) {
+        println!("Best Block: {}", hash);
+    }
+    if let Some(diff) = info.get("difficulty").and_then(|v| v.as_f64()) {
+        println!("Difficulty: {:.2}", diff);
+    }
+    if let Some(progress) = info.get("verificationprogress").and_then(|v| v.as_f64()) {
+        println!("Verification Progress: {:.2}%", progress * 100.0);
+    }
+    
+    Ok(())
+}
+
+async fn handle_peers(rpc_addr: SocketAddr, _config: &NodeConfig) -> Result<()> {
+    let peers = rpc_call(rpc_addr, "getpeerinfo", json!([])).await?;
+    
+    println!("=== Connected Peers ===");
+    if let Some(peer_array) = peers.as_array() {
+        if peer_array.is_empty() {
+            println!("No peers connected");
+        } else {
+            for (i, peer) in peer_array.iter().enumerate() {
+                println!("\nPeer {}:", i + 1);
+                if let Some(addr) = peer.get("addr").and_then(|v| v.as_str()) {
+                    println!("  Address: {}", addr);
+                }
+                if let Some(version) = peer.get("version").and_then(|v| v.as_u64()) {
+                    println!("  Version: {}", version);
+                }
+                if let Some(latency) = peer.get("latency").and_then(|v| v.as_f64()) {
+                    println!("  Latency: {:.2}ms", latency * 1000.0);
+                }
+            }
+        }
+    }
+    
+    Ok(())
+}
+
+async fn handle_network(rpc_addr: SocketAddr, _config: &NodeConfig) -> Result<()> {
+    let info = rpc_call(rpc_addr, "getnetworkinfo", json!([])).await?;
+    
+    println!("=== Network Information ===");
+    println!("Version: {}", info.get("version").and_then(|v| v.as_u64()).unwrap_or(0));
+    println!("Subversion: {}", info.get("subversion").and_then(|v| v.as_str()).unwrap_or("unknown"));
+    println!("Network Active: {}", info.get("networkactive").and_then(|v| v.as_bool()).unwrap_or(false));
+    if let Some(connections) = info.get("connections").and_then(|v| v.as_u64()) {
+        println!("Connections: {}", connections);
+    }
+    if let Some(local_addrs) = info.get("localaddresses").and_then(|v| v.as_array()) {
+        if !local_addrs.is_empty() {
+            println!("Local Addresses:");
+            for addr in local_addrs {
+                if let Some(addr_str) = addr.get("address").and_then(|v| v.as_str()) {
+                    println!("  {}", addr_str);
+                }
+            }
+        }
+    }
+    
+    Ok(())
+}
+
+async fn handle_sync(rpc_addr: SocketAddr, _config: &NodeConfig) -> Result<()> {
+    let info = rpc_call(rpc_addr, "getblockchaininfo", json!([])).await?;
+    
+    let blocks = info.get("blocks").and_then(|v| v.as_u64()).unwrap_or(0);
+    let headers = info.get("headers").and_then(|v| v.as_u64()).unwrap_or(0);
+    let progress = info.get("verificationprogress").and_then(|v| v.as_f64()).unwrap_or(0.0);
+    
+    println!("=== Sync Status ===");
+    println!("Blocks: {}", blocks);
+    println!("Headers: {}", headers);
+    println!("Progress: {:.2}%", progress * 100.0);
+    
+    if blocks == headers && progress >= 1.0 {
+        println!("Status: ✅ Fully synced");
+    } else if headers > blocks {
+        println!("Status: ⏳ Syncing ({} blocks behind)", headers - blocks);
+    } else {
+        println!("Status: ⏳ Verifying");
+    }
+    
+    Ok(())
+}
+
+fn handle_config_show(config: &NodeConfig) -> Result<()> {
+    println!("{}", toml::to_string_pretty(config).context("Failed to serialize config")?);
+    Ok(())
+}
+
+fn handle_config_validate(path: Option<PathBuf>, cli_config: &Option<PathBuf>) -> Result<()> {
+    let config_path = path.or_else(|| cli_config.clone()).or_else(|| find_config_file(cli_config));
+    
+    match config_path {
+        Some(path) => {
+            match NodeConfig::from_file(&path) {
+                Ok(_) => {
+                    println!("✅ Configuration file is valid: {}", path.display());
+                    Ok(())
+                }
+                Err(e) => {
+                    eprintln!("❌ Configuration file is invalid: {}", e);
+                    std::process::exit(1);
+                }
+            }
+        }
+        None => {
+            eprintln!("❌ No configuration file found");
+            std::process::exit(1);
+        }
+    }
+}
+
+fn handle_config_path(cli_config: &Option<PathBuf>) -> Result<()> {
+    if let Some(path) = find_config_file(cli_config) {
+        println!("{}", path.display());
+        Ok(())
+    } else {
+        println!("No configuration file found");
+        Ok(())
+    }
+}
+
+async fn handle_rpc(rpc_addr: SocketAddr, method: &str, params: Value, _config: &NodeConfig) -> Result<()> {
+    let result = rpc_call(rpc_addr, method, params).await?;
+    println!("{}", serde_json::to_string_pretty(&result)?);
+    Ok(())
 }
 

@@ -72,6 +72,70 @@ bllvm --data-dir /var/lib/bllvm
 bllvm --verbose
 ```
 
+## Commands
+
+The `bllvm` binary supports subcommands for node management and information queries. If no subcommand is provided, the node starts (default behavior).
+
+### Node Information Commands
+
+```bash
+# Show comprehensive node status
+bllvm status
+
+# Health check (exit code 0 if healthy)
+bllvm health
+
+# Show version and build information
+bllvm version
+
+# Show blockchain information
+bllvm chain
+
+# Show connected peers
+bllvm peers
+
+# Show network information
+bllvm network
+
+# Show sync status
+bllvm sync
+```
+
+### Configuration Commands
+
+```bash
+# Show loaded configuration
+bllvm config show
+
+# Validate configuration file
+bllvm config validate [path]
+
+# Show configuration file path
+bllvm config path
+```
+
+### RPC Commands
+
+```bash
+# Direct RPC call
+bllvm rpc <method> [params]
+
+# Example: Get blockchain info
+bllvm rpc getblockchaininfo
+
+# Example: Get peer info with custom RPC address
+bllvm rpc getpeerinfo --rpc-addr 127.0.0.1:8332
+```
+
+### Command Options
+
+All information commands support `--rpc-addr` to override the RPC server address:
+
+```bash
+bllvm status --rpc-addr 127.0.0.1:8332
+bllvm health --rpc-addr 127.0.0.1:8332
+```
+
 ---
 
 ## Configuration

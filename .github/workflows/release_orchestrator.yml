@@ -7,6 +7,15 @@ on:
         description: 'Ref/tag to use for all repos (optional, falls back to versions.toml)'
         required: false
         default: ''
+  repository_dispatch:
+    types: [build_consensus, build_protocol, build_node, build_sdk, build_governance, build_all]
+  workflow_run:
+    workflows: 
+      - "CI"
+      - "Build"
+      - "Release"
+    types: [completed]
+    branches: [main, master]
 
 permissions:
   contents: read
@@ -91,17 +100,37 @@ jobs:
     needs: build-developer-sdk
     uses: ./.github/workflows/build_docker.yml
     with:
-      repo: governance-app
+      repo: bllvm-commons  # GitHub repo name (was governance-app)
       context: .
-      image_name: governance-app
+      image_name: governance-app  # Docker image name (kept for compatibility)
       push: false
       ref: ${{ needs.read-versions.outputs.ga }}
       tag: ${{ needs.read-versions.outputs.ga }}
       use_cache: true
       timeout_minutes: 30
 
-  deploy-signal:
+  trigger-prerelease:
     needs: build-governance-app-image
+    if: success()
+    runs-on: [self-hosted, Linux, X64]
+    steps:
+      - name: Generate prerelease version
+        id: version
+        run: |
+          DATE=$(date +%Y%m%d)
+          COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+          VERSION="nightly-${DATE}-${COMMIT}"
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "Generated prerelease version: ${VERSION}"
+      
+      - name: Trigger prerelease
+        uses: ./.github/workflows/prerelease.yml
+        with:
+          version_tag: ${{ steps.version.outputs.version }}
+          platform: both
+
+  deploy-signal:
+    needs: [build-governance-app-image, trigger-prerelease]
     runs-on: [self-hosted, Linux, X64]
     steps:
       - name: Send deployment signal to governance-app self-hosted runner
@@ -111,7 +140,7 @@ jobs:
           script: |
             await github.rest.repos.createDispatchEvent({
               owner: context.repo.owner,
-              repo: 'governance-app',
+              repo: 'bllvm-commons',  # GitHub repo name (was governance-app)
               event_type: 'deploy',
               client_payload: { 
                 tag: '${{ needs.read-versions.outputs.ga }}',

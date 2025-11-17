@@ -1,0 +1,53 @@
+name: Nightly Prerelease
+
+on:
+  schedule:
+    # Run at 2 AM UTC daily
+    - cron: '0 2 * * *'
+  workflow_dispatch:  # Allow manual trigger
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  create-nightly-prerelease:
+    name: Create Nightly Prerelease
+    runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 120
+    
+    steps:
+      - name: Checkout commons
+        uses: actions/checkout@v4
+        with:
+          repository: BTCDecoded/commons
+          path: commons
+          ref: main
+          fetch-depth: 0
+      
+      - name: Generate nightly version tag
+        id: version
+        run: |
+          DATE=$(date +%Y%m%d)
+          COMMIT=$(git -C commons rev-parse --short HEAD)
+          VERSION="nightly-${DATE}-${COMMIT}"
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "Generated nightly version: ${VERSION}"
+      
+      - name: Trigger orchestrator
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.REPO_ACCESS_TOKEN || secrets.ORG_PAT || secrets.GITHUB_TOKEN }}
+          script: |
+            await github.rest.repos.createDispatchEvent({
+              owner: 'BTCDecoded',
+              repo: 'bllvm',
+              event_type: 'build_all',
+              client_payload: {
+                nightly: true,
+                version: '${{ steps.version.outputs.version }}'
+              }
+            })
+            console.log('✅ Triggered orchestrator for nightly build')
+            console.log('Orchestrator will automatically create prerelease after build completes')
+
