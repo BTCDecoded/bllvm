@@ -37,12 +37,12 @@ services:
       dockerfile: Dockerfile
     image: btcdecoded/developer-sdk:latest
     
-  # Build governance-app (binaries)
-  governance-app:
+  # Build bllvm-commons (binaries)
+  bllvm-commons:
     build:
-      context: ../governance-app
+      context: ../bllvm-commons
       dockerfile: Dockerfile
-    image: btcdecoded/governance-app:latest
+    image: btcdecoded/bllvm-commons:latest
     depends_on:
       - developer-sdk
 

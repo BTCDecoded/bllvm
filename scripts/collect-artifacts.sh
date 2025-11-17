@@ -26,7 +26,7 @@ fi
 declare -A REPO_BINARIES
 REPO_BINARIES[bllvm]="bllvm"
 REPO_BINARIES[bllvm-sdk]="bllvm-keygen bllvm-sign bllvm-verify"
-REPO_BINARIES[governance-app]="governance-app key-manager test-content-hash test-content-hash-standalone"
+REPO_BINARIES[bllvm-commons]="bllvm-commons key-manager test-content-hash test-content-hash-standalone"
 
 log_info() {
     echo "[INFO] $1"
@@ -117,13 +117,13 @@ main() {
     mkdir -p "$BINARIES_DIR"
     
     # Collect binaries from each repo
-    # Note: governance-app may not cross-compile easily, skip for Windows for now
+    # Note: bllvm-commons may not cross-compile easily, skip for Windows for now
     if [[ "$PLATFORM" == *"windows"* ]]; then
         for repo in bllvm bllvm-sdk; do
             collect_repo_binaries "$repo"
         done
     else
-        for repo in bllvm bllvm-sdk governance-app; do
+        for repo in bllvm bllvm-sdk bllvm-commons; do
         collect_repo_binaries "$repo"
     done
     fi

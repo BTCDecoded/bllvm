@@ -40,7 +40,7 @@ This release includes the following components:
 - **bllvm-protocol** - Bitcoin protocol abstraction layer
 - **bllvm-node** - Minimal Bitcoin node implementation
 - **bllvm-sdk** - Governance infrastructure and CLI tools
-- **governance-app** - GitHub App for cryptographic governance enforcement
+- **bllvm-commons** - GitHub App for cryptographic governance enforcement
 
 ## Binaries Included
 
@@ -48,7 +48,7 @@ This release includes the following components:
 - \`bllvm-keygen\` - Key generation tool
 - \`bllvm-sign\` - Message signing tool
 - \`bllvm-verify\` - Signature verification tool
-- \`governance-app\` - Governance application server
+- \`bllvm-commons\` - Governance application server
 - \`key-manager\` - Key management utility
 - \`test-content-hash\` - Content hash testing tool
 - \`test-content-hash-standalone\` - Standalone content hash test
