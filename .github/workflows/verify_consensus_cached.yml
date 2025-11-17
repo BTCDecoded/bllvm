@@ -36,7 +36,7 @@ env:
 jobs:
   verify:
     # Kani is installed dynamically, so we only need rust label
-    runs-on: self-hosted,Linux,X64
+    runs-on: [self-hosted, Linux, X64]
     timeout-minutes: ${{ inputs.timeout_minutes }}
     
     steps:

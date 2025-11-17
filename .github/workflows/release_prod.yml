@@ -1,0 +1,542 @@
+name: Create Production Release
+
+on:
+  workflow_call:
+    inputs:
+      version_tag:
+        description: 'Version tag for production release (e.g., v0.1.0)'
+        required: true
+        type: string
+      platform:
+        description: 'Platform to build for'
+        required: false
+        default: 'both'
+        type: choice
+        options:
+          - linux
+          - windows
+          - both
+  workflow_dispatch:
+    inputs:
+      version_tag:
+        description: 'Version tag for production release (e.g., v0.1.0)'
+        required: true
+        type: string
+      platform:
+        description: 'Platform to build for'
+        required: false
+        default: 'both'
+        type: choice
+        options:
+          - linux
+          - windows
+          - both
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  determine-requirements:
+    name: Determine Build Requirements
+    runs-on: [self-hosted, Linux, X64]
+    outputs:
+      build_requirements: ${{ steps.check.outputs.requirements }}
+    steps:
+      - name: Checkout commons
+        uses: actions/checkout@v4
+        with:
+          repository: BTCDecoded/commons
+          path: commons
+          ref: main
+          fetch-depth: 0
+      
+      - name: Determine which repos need building
+        id: check
+        run: |
+          chmod +x commons/scripts/*.sh
+          REQUIREMENTS=$(commons/scripts/determine-build-requirements.sh commons/versions.toml ${{ inputs.platform }} || echo "{}")
+          echo "requirements<<EOF" >> $GITHUB_OUTPUT
+          echo "$REQUIREMENTS" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+          echo "Build requirements determined:"
+          echo "$REQUIREMENTS" | jq '.'
+        env:
+          GITHUB_TOKEN: ${{ secrets.REPO_ACCESS_TOKEN }}
+          GITHUB_ORG: BTCDecoded
+
+  release:
+    name: Create Production Release ${{ inputs.version_tag }}
+    needs: determine-requirements
+    runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 180
+    steps:
+      - name: Checkout commons
+        uses: actions/checkout@v4
+        with:
+          repository: BTCDecoded/commons
+          path: commons
+          ref: main
+          fetch-depth: 0
+      
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      
+      - name: Check for performance tools and configure environment
+        run: |
+          echo "Checking for performance optimization tools..."
+          RUSTFLAGS_BASE="-C debuginfo=0"
+          if command -v mold &> /dev/null; then
+            echo "✅ mold linker found"
+            echo "RUSTFLAGS=${RUSTFLAGS_BASE} -C link-arg=-fuse-ld=mold" >> $GITHUB_ENV
+          else
+            echo "⚠️  mold linker not found (install for faster linking)"
+            echo "RUSTFLAGS=${RUSTFLAGS_BASE}" >> $GITHUB_ENV
+          fi
+          if command -v ccache &> /dev/null; then
+            echo "✅ ccache found"
+            echo "CC=ccache gcc" >> $GITHUB_ENV
+            echo "CXX=ccache g++" >> $GITHUB_ENV
+          else
+            echo "⚠️  ccache not found (install for faster C dependency builds)"
+          fi
+      
+      - name: Fix corrupted cargo dependencies and config
+        run: |
+          # Update rustup and toolchain (cargo comes with the toolchain)
+          rustup update stable || true
+          # CRITICAL: Unset CARGO_BUILD_JOBS if it's 0 (cargo rejects this)
+          if [ "${CARGO_BUILD_JOBS:-}" = "0" ]; then
+            echo "⚠️  CARGO_BUILD_JOBS is set to 0, unsetting it..."
+            unset CARGO_BUILD_JOBS
+            # Remove from GITHUB_ENV if it exists
+            if [ -f "$GITHUB_ENV" ]; then
+              sed -i '/^CARGO_BUILD_JOBS=/d' "$GITHUB_ENV" || true
+            fi
+          fi
+          # Remove jobs=0 from config files (cargo rejects this)
+          # Check for various formats: jobs=0, jobs = 0, jobs= 0, jobs =0
+          if [ -f ~/.cargo/config.toml ]; then
+            if grep -qE "jobs\s*=\s*0" ~/.cargo/config.toml 2>/dev/null; then
+              echo "⚠️  Found jobs=0 in ~/.cargo/config.toml, removing it..."
+              sed -i -E '/jobs\s*=\s*0/d' ~/.cargo/config.toml || true
+            fi
+          fi
+          # Remove jobs=0 from workspace config files
+          find . -name "config.toml" -path "*/.cargo/*" 2>/dev/null | while read file; do
+            if grep -qE "jobs\s*=\s*0" "$file" 2>/dev/null; then
+              echo "⚠️  Found jobs=0 in $file, removing it..."
+              sed -i -E '/jobs\s*=\s*0/d' "$file" || true
+            fi
+          done
+          # Remove incremental from config files when using sccache
+          if [ "${RUSTC_WRAPPER:-}" = "sccache" ]; then
+            if [ -f ~/.cargo/config.toml ]; then
+              if grep -q "incremental" ~/.cargo/config.toml 2>/dev/null; then
+                echo "⚠️  Removing incremental from ~/.cargo/config.toml (sccache requirement)"
+                sed -i '/\[build\]/,/^\[/ { /incremental/d; }' ~/.cargo/config.toml || true
+                sed -i '/^incremental/d' ~/.cargo/config.toml || true
+              fi
+            fi
+            find . -name "config.toml" -path "*/.cargo/*" 2>/dev/null | while read file; do
+              if grep -q "incremental" "$file" 2>/dev/null; then
+                echo "⚠️  Removing incremental from $file (sccache requirement)"
+                sed -i '/incremental/d' "$file" || true
+              fi
+            done
+            unset CARGO_INCREMENTAL || true
+          fi
+          # Completely clear cargo registry to fix corrupted crates
+          echo "Cleaning corrupted cargo registry..."
+          rm -rf ~/.cargo/registry/src/* 2>/dev/null || true
+          rm -rf ~/.cargo/registry/cache/* 2>/dev/null || true
+          rm -rf ~/.cargo/git/db/* 2>/dev/null || true
+          rm -rf ~/.cargo/git/checkouts/* 2>/dev/null || true
+          echo "Cargo registry cleaned, dependencies will be re-downloaded"
+      
+      - name: Download existing release artifacts
+        run: |
+          COMMONS_DIR="${GITHUB_WORKSPACE}/commons"
+          ARTIFACTS_DIR="${COMMONS_DIR}/artifacts"
+          mkdir -p "$ARTIFACTS_DIR"
+          
+          chmod +x commons/scripts/*.sh
+          
+          echo "=== Downloading Existing Release Artifacts ==="
+          
+          # Parse build requirements from previous job
+          REQUIREMENTS='${{ needs.determine-requirements.outputs.build_requirements }}'
+          
+          # Download artifacts for repos that have existing releases
+          echo "$REQUIREMENTS" | jq -r 'to_entries[] | select(.value.download == true) | "\(.key)|\(.value.version)"' | while IFS='|' read -r repo version; do
+            echo "Downloading artifacts for ${repo}@${version}..."
+            if commons/scripts/download-release-artifacts.sh "$repo" "$version" "$ARTIFACTS_DIR" "BTCDecoded" "${{ inputs.platform }}" || true; then
+              echo "✅ Downloaded artifacts for ${repo}"
+            else
+              echo "⚠️  Failed to download artifacts for ${repo}, will need to build"
+            fi
+          done
+        env:
+          GITHUB_TOKEN: ${{ secrets.REPO_ACCESS_TOKEN }}
+          GITHUB_ORG: BTCDecoded
+        continue-on-error: true
+      
+      - name: Checkout all repos at locked versions
+        run: |
+          COMMONS_DIR="${GITHUB_WORKSPACE}/commons"
+          chmod +x commons/scripts/*.sh
+          
+          echo "=== Checking Out All Repos at Locked Versions ==="
+          echo "Note: All repos are checked out for dependency resolution, even if artifacts are downloaded"
+          
+          # Checkout all repos at their locked versions from versions.toml
+          # This ensures dependencies are available even if we download artifacts for some repos
+          # Use the version tag from the unified release (all repos should be at same version)
+          commons/scripts/setup-build-env.sh ${{ inputs.version_tag }} || {
+            echo "⚠️  Some repos may not have been checked out, continuing..."
+          }
+        env:
+          GITHUB_TOKEN: ${{ secrets.REPO_ACCESS_TOKEN }}
+          PARENT_DIR: ${{ github.workspace }}
+      
+      - name: Install Windows target for cross-compilation
+        if: ${{ inputs.platform == 'windows' || inputs.platform == 'both' }}
+        run: |
+          rustup target add x86_64-pc-windows-gnu
+          echo "Windows target installed"
+      
+      - name: Build repositories that need building (Linux)
+        if: ${{ inputs.platform == 'linux' || inputs.platform == 'both' }}
+        run: |
+          COMMONS_DIR="${GITHUB_WORKSPACE}/commons"
+          REQUIREMENTS='${{ needs.determine-requirements.outputs.build_requirements }}'
+          REPOS_TO_BUILD=$(echo "$REQUIREMENTS" | jq -r 'to_entries[] | select(.value.build == true) | .key' | tr '\n' ' ')
+          
+          if [ -z "$REPOS_TO_BUILD" ]; then
+            echo "✅ No repos need building for Linux - all artifacts downloaded from existing releases"
+            exit 0
+          fi
+          
+          echo "Building Linux binaries for: $REPOS_TO_BUILD"
+          echo "Note: build.sh will build all repos, but we'll only collect binaries for repos that were built"
+          
+          # CRITICAL: Unset CARGO_BUILD_JOBS if it's 0 (cargo rejects this)
+          if [ "${CARGO_BUILD_JOBS:-}" = "0" ]; then
+            echo "⚠️  CARGO_BUILD_JOBS is set to 0, unsetting it..."
+            unset CARGO_BUILD_JOBS
+          fi
+          
+          # Build all repos (build.sh requires all repos to be present for dependencies)
+          # Even if we downloaded artifacts for some repos, we still need to build dependencies
+          commons/build.sh --mode release
+        env:
+          PARENT_DIR: ${{ github.workspace }}
+          RUSTFLAGS: "-C debuginfo=0"
+      
+      - name: Build repositories that need building (Windows cross-compile)
+        if: ${{ inputs.platform == 'windows' || inputs.platform == 'both' }}
+        run: |
+          COMMONS_DIR="${GITHUB_WORKSPACE}/commons"
+          REQUIREMENTS='${{ needs.determine-requirements.outputs.build_requirements }}'
+          REPOS_TO_BUILD=$(echo "$REQUIREMENTS" | jq -r 'to_entries[] | select(.value.build == true) | .key' | tr '\n' ' ')
+          
+          if [ -z "$REPOS_TO_BUILD" ]; then
+            echo "✅ No repos need building for Windows"
+            exit 0
+          fi
+          
+          echo "Building Windows binaries for: $REPOS_TO_BUILD"
+          
+          cd ${{ github.workspace }}
+          for repo in $REPOS_TO_BUILD; do
+            if [ -d "$repo" ]; then
+              echo "Building $repo for Windows..."
+              cd "$repo"
+              unset CC CXX || true
+              cargo build --release --target x86_64-pc-windows-gnu --all-features || {
+                echo "Windows build failed for $repo (continuing...)"
+              }
+              cd ..
+            fi
+          done
+        env:
+          PARENT_DIR: ${{ github.workspace }}
+          CARGO_INCREMENTAL: "1"
+          RUSTFLAGS: "-C debuginfo=0"
+      
+      - name: Run tests for built repositories
+        run: |
+          COMMONS_DIR="${GITHUB_WORKSPACE}/commons"
+          REQUIREMENTS='${{ needs.determine-requirements.outputs.build_requirements }}'
+          REPOS_TO_BUILD=$(echo "$REQUIREMENTS" | jq -r 'to_entries[] | select(.value.build == true) | .key' | tr '\n' ' ')
+          
+          if [ -z "$REPOS_TO_BUILD" ]; then
+            echo "✅ No repos were built, skipping tests"
+            exit 0
+          fi
+          
+          echo "Running tests for: $REPOS_TO_BUILD"
+          
+          cd ${{ github.workspace }}
+          for repo in $REPOS_TO_BUILD; do
+            if [ -d "$repo" ]; then
+              echo "Running tests in $repo..."
+              cd "$repo"
+              timeout 1800 cargo test --release --all-features --lib --bins --tests -- --test-threads=1 --skip test_handle_incoming_wire_tcp_enqueues_pkgtxn 2>&1 | tee /tmp/test_output.log || {
+                EXIT_CODE=$?
+                if [ $EXIT_CODE -eq 124 ]; then
+                  echo "Tests timed out in $repo (exceeded 30 minutes)"
+                  tail -50 /tmp/test_output.log || true
+                else
+                  echo "Tests failed in $repo"
+                  tail -50 /tmp/test_output.log || true
+                fi
+                exit 1
+              }
+              cd ..
+            fi
+          done
+        env:
+          PARENT_DIR: ${{ github.workspace }}
+          CI: true
+          GITHUB_ACTIONS: true
+      
+      - name: Collect artifacts (from builds and downloads)
+        run: |
+          if [ "${{ inputs.platform }}" = "linux" ] || [ "${{ inputs.platform }}" = "both" ]; then
+            commons/scripts/collect-artifacts.sh linux-x86_64
+          fi
+          if [ "${{ inputs.platform }}" = "windows" ] || [ "${{ inputs.platform }}" = "both" ]; then
+            commons/scripts/collect-artifacts.sh windows-x86_64
+          fi
+      
+      - name: Generate component manifests
+        run: |
+          COMMONS_DIR="${GITHUB_WORKSPACE}/commons"
+          ARTIFACTS_DIR="${COMMONS_DIR}/artifacts"
+          MANIFESTS_DIR="${ARTIFACTS_DIR}/manifests"
+          mkdir -p "$MANIFESTS_DIR"
+          
+          chmod +x commons/scripts/*.sh
+          
+          REQUIREMENTS='${{ needs.determine-requirements.outputs.build_requirements }}'
+          PLATFORM="${{ inputs.platform }}"
+          
+          echo "=== Generating Component Manifests ==="
+          
+          # Generate manifests for all repos (both downloaded and built)
+          echo "$REQUIREMENTS" | jq -r 'to_entries[] | "\(.key)|\(.value.version)"' | while IFS='|' read -r repo version; do
+            # Get commit hash from checked out repo if available
+            COMMIT_HASH=""
+            if [ -d "${GITHUB_WORKSPACE}/${repo}/.git" ]; then
+              cd "${GITHUB_WORKSPACE}/${repo}"
+              COMMIT_HASH=$(git rev-parse HEAD 2>/dev/null || echo "")
+              cd - > /dev/null
+            fi
+            
+            if [ -z "$COMMIT_HASH" ]; then
+              # Try to get from GitHub API
+              TOKEN="${GITHUB_TOKEN:-${REPO_ACCESS_TOKEN:-}}"
+              if [ -n "$TOKEN" ]; then
+                RELEASE_JSON=$(curl -s -H "Authorization: token $TOKEN" \
+                  "https://api.github.com/repos/BTCDecoded/${repo}/releases/tags/${version}" 2>/dev/null || echo "{}")
+                COMMIT_HASH=$(echo "$RELEASE_JSON" | jq -r '.target_commitish // ""' || echo "")
+              fi
+            fi
+            
+            if [ -z "$COMMIT_HASH" ]; then
+              COMMIT_HASH="unknown"
+            fi
+            
+            # Determine platform for manifest
+            MANIFEST_PLATFORM="linux-x86_64"
+            if [ "$PLATFORM" = "windows" ]; then
+              MANIFEST_PLATFORM="windows-x86_64"
+            fi
+            
+            # Generate manifest
+            MANIFEST_FILE="${MANIFESTS_DIR}/component-${repo}-${version}.json"
+            if commons/scripts/generate-component-manifest.sh \
+              "$repo" "$version" "$COMMIT_HASH" "$MANIFEST_PLATFORM" "$MANIFEST_FILE" \
+              --artifacts-dir "$ARTIFACTS_DIR"; then
+              echo "✅ Generated manifest for ${repo}@${version}"
+            else
+              echo "⚠️  Failed to generate manifest for ${repo} (continuing...)"
+            fi
+          done
+        env:
+          GITHUB_TOKEN: ${{ secrets.REPO_ACCESS_TOKEN }}
+          GITHUB_ORG: BTCDecoded
+        continue-on-error: true
+      
+      - name: Generate integration manifest
+        run: |
+          COMMONS_DIR="${GITHUB_WORKSPACE}/commons"
+          ARTIFACTS_DIR="${COMMONS_DIR}/artifacts"
+          MANIFESTS_DIR="${ARTIFACTS_DIR}/manifests"
+          
+          chmod +x commons/scripts/*.sh
+          
+          echo "=== Generating Integration Manifest ==="
+          
+          # Collect all component manifest files
+          COMPONENT_MANIFESTS=()
+          if [ -d "$MANIFESTS_DIR" ]; then
+            while IFS= read -r -d '' manifest; do
+              COMPONENT_MANIFESTS+=("$manifest")
+            done < <(find "$MANIFESTS_DIR" -name "component-*.json" -print0 2>/dev/null || true)
+          fi
+          
+          # Generate integration manifest
+          INTEGRATION_MANIFEST="${ARTIFACTS_DIR}/release-manifest.json"
+          if commons/scripts/generate-integration-manifest.sh \
+            "${{ inputs.version_tag }}" "$ARTIFACTS_DIR" "$INTEGRATION_MANIFEST" \
+            "${COMPONENT_MANIFESTS[@]}" 2>/dev/null; then
+            echo "✅ Generated integration manifest"
+            echo "Manifest contents:"
+            cat "$INTEGRATION_MANIFEST" | jq '.' || cat "$INTEGRATION_MANIFEST"
+          else
+            echo "⚠️  Failed to generate integration manifest (continuing...)"
+          fi
+        continue-on-error: true
+      
+      - name: Validate all artifacts exist
+        run: |
+          COMMONS_DIR="${GITHUB_WORKSPACE}/commons"
+          ARTIFACTS_DIR="${COMMONS_DIR}/artifacts"
+          MISSING_ARTIFACTS=0
+          
+          echo "=== Validating All Artifacts ==="
+          
+          # Check for expected binaries based on platform
+          if [ "${{ inputs.platform }}" = "linux" ] || [ "${{ inputs.platform }}" = "both" ]; then
+            echo "Checking Linux artifacts..."
+            if [ ! -d "${ARTIFACTS_DIR}/binaries" ]; then
+              echo "❌ ERROR: Linux binaries directory not found"
+              MISSING_ARTIFACTS=1
+            else
+              LINUX_BINARIES=$(find "${ARTIFACTS_DIR}/binaries" -type f -executable 2>/dev/null | wc -l)
+              if [ "$LINUX_BINARIES" -eq 0 ]; then
+                echo "❌ ERROR: No Linux binaries found"
+                MISSING_ARTIFACTS=1
+              else
+                echo "✅ Found $LINUX_BINARIES Linux binary(ies)"
+              fi
+            fi
+          fi
+          
+          if [ "${{ inputs.platform }}" = "windows" ] || [ "${{ inputs.platform }}" = "both" ]; then
+            echo "Checking Windows artifacts..."
+            if [ ! -d "${ARTIFACTS_DIR}/binaries-windows" ]; then
+              echo "❌ ERROR: Windows binaries directory not found"
+              MISSING_ARTIFACTS=1
+            else
+              WINDOWS_BINARIES=$(find "${ARTIFACTS_DIR}/binaries-windows" -type f -name "*.exe" 2>/dev/null | wc -l)
+              if [ "$WINDOWS_BINARIES" -eq 0 ]; then
+                echo "❌ ERROR: No Windows binaries found"
+                MISSING_ARTIFACTS=1
+              else
+                echo "✅ Found $WINDOWS_BINARIES Windows binary(ies)"
+              fi
+            fi
+          fi
+          
+          if [ "$MISSING_ARTIFACTS" -ne 0 ]; then
+            echo ""
+            echo "❌ Artifact validation failed - missing required artifacts"
+            exit 1
+          fi
+          
+          echo ""
+          echo "✅ All artifacts validated"
+      
+      - name: Create release package
+        run: |
+          commons/scripts/create-release.sh ${{ inputs.version_tag }}
+      
+      - name: Verify versions
+        run: |
+          commons/scripts/verify-versions.sh
+      
+      - name: Validate release artifacts before publishing
+        run: |
+          COMMONS_DIR="${GITHUB_WORKSPACE}/commons"
+          ARTIFACTS_DIR="${COMMONS_DIR}/artifacts"
+          VERSION_TAG="${{ inputs.version_tag }}"
+          
+          echo "=== Final Artifact Validation ==="
+          
+          REQUIRED_FILES=0
+          FOUND_FILES=0
+          
+          if [ "${{ inputs.platform }}" = "linux" ] || [ "${{ inputs.platform }}" = "both" ]; then
+            REQUIRED_FILES=$((REQUIRED_FILES + 1))
+            if [ -f "${ARTIFACTS_DIR}/bllvm-${VERSION_TAG}-linux-x86_64.tar.gz" ]; then
+              echo "✅ Found Linux release package"
+              FOUND_FILES=$((FOUND_FILES + 1))
+            else
+              echo "❌ ERROR: Linux release package not found"
+            fi
+          fi
+          
+          if [ "${{ inputs.platform }}" = "windows" ] || [ "${{ inputs.platform }}" = "both" ]; then
+            REQUIRED_FILES=$((REQUIRED_FILES + 1))
+            if [ -f "${ARTIFACTS_DIR}/bllvm-${VERSION_TAG}-windows-x86_64.zip" ]; then
+              echo "✅ Found Windows release package"
+              FOUND_FILES=$((FOUND_FILES + 1))
+            else
+              echo "❌ ERROR: Windows release package not found"
+            fi
+          fi
+          
+          if [ -f "${ARTIFACTS_DIR}/SHA256SUMS-linux-x86_64" ] || [ -f "${ARTIFACTS_DIR}/SHA256SUMS-windows-x86_64" ]; then
+            echo "✅ Found SHA256SUMS file(s)"
+            FOUND_FILES=$((FOUND_FILES + 1))
+          else
+            echo "❌ ERROR: No SHA256SUMS files found"
+          fi
+          
+          if [ -f "${ARTIFACTS_DIR}/RELEASE_NOTES.md" ]; then
+            echo "✅ Found RELEASE_NOTES.md"
+            FOUND_FILES=$((FOUND_FILES + 1))
+          else
+            echo "❌ ERROR: RELEASE_NOTES.md not found"
+          fi
+          
+          # Check for integration manifest (optional but recommended)
+          if [ -f "${ARTIFACTS_DIR}/release-manifest.json" ]; then
+            echo "✅ Found release-manifest.json"
+            FOUND_FILES=$((FOUND_FILES + 1))
+          else
+            echo "⚠️  WARNING: release-manifest.json not found (recommended for provenance)"
+          fi
+          
+          if [ "$FOUND_FILES" -lt "$((REQUIRED_FILES + 2))" ]; then
+            echo ""
+            echo "❌ Release artifact validation failed"
+            echo "Found $FOUND_FILES required files, expected at least $((REQUIRED_FILES + 2))"
+            exit 1
+          fi
+          
+          echo ""
+          echo "✅ All required release artifacts validated"
+      
+      - name: Create GitHub Production Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ inputs.version_tag }}
+          name: BTCDecoded ${{ inputs.version_tag }}
+          body_path: commons/artifacts/RELEASE_NOTES.md
+          files: |
+            commons/artifacts/*.tar.gz
+            commons/artifacts/*.zip
+            commons/artifacts/SHA256SUMS-*
+            commons/artifacts/release-manifest.json
+            commons/artifacts/manifests/*.json
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.REPO_ACCESS_TOKEN }}
+

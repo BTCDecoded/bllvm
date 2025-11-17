@@ -67,8 +67,17 @@ sudo mv binaries/* /usr/local/bin/
 Verify checksums:
 
 \`\`\`bash
-sha256sum -c SHA256SUMS
+sha256sum -c SHA256SUMS-*
 \`\`\`
+
+Verify component provenance:
+
+\`\`\`bash
+# Check release manifest for component versions and hashes
+cat release-manifest.json | jq '.'
+\`\`\`
+
+Component manifests are available in the \`manifests/\` directory for detailed provenance information.
 
 ## Documentation
 
