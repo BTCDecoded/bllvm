@@ -11,6 +11,10 @@ keywords = ["bitcoin", "node", "blockchain", "cryptocurrency", "p2p"]
 categories = ["cryptography::cryptocurrencies", "network-programming"]
 rust-version = "1.82"
 
+[lib]
+name = "bllvm"
+path = "src/lib.rs"
+
 [[bin]]
 name = "bllvm"
 path = "src/bin/main.rs"
@@ -23,6 +27,12 @@ tracing = "=0.1.41"
 tracing-subscriber = { version = "=0.3.18", features = ["env-filter"] }
 anyhow = "=1.0.93"
 toml = "0.8"
+serde = { version = "1.0", features = ["derive"] }
+
+[dev-dependencies]
+tempfile = "3.8"
+assert_cmd = "2.0"
+predicates = "3.0"
 
 [profile.release]
 opt-level = 3
