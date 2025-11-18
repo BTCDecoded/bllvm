@@ -158,19 +158,11 @@ rename_archives() {
             fi
         done
         
-        # Governance tools (base variant)
+        # Governance tools (single variant - same for both base and experimental)
         for ext in tar.gz zip; do
             if [ -f "bllvm-governance-${platform}.${ext}" ]; then
                 mv "bllvm-governance-${platform}.${ext}" "bllvm-governance-${VERSION_TAG}-${platform}.${ext}"
                 log_success "Renamed: bllvm-governance-${platform}.${ext} -> bllvm-governance-${VERSION_TAG}-${platform}.${ext}"
-            fi
-        done
-        
-        # Governance tools (experimental variant)
-        for ext in tar.gz zip; do
-            if [ -f "bllvm-governance-experimental-${platform}.${ext}" ]; then
-                mv "bllvm-governance-experimental-${platform}.${ext}" "bllvm-governance-experimental-${VERSION_TAG}-${platform}.${ext}"
-                log_success "Renamed: bllvm-governance-experimental-${platform}.${ext} -> bllvm-governance-experimental-${VERSION_TAG}-${platform}.${ext}"
             fi
         done
     done

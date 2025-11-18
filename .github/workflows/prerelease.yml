@@ -450,6 +450,7 @@ jobs:
       
       - name: Collect artifacts (experimental variant)
         run: |
+          # Only collect bllvm binary for experimental (governance tools are the same, collected in base)
           if [ "${{ inputs.platform }}" = "linux" ] || [ "${{ inputs.platform }}" = "both" ]; then
             bllvm/scripts/collect-artifacts.sh linux-x86_64 experimental
           fi
@@ -485,20 +486,12 @@ jobs:
               echo "✅ Found $LINUX_EXP_BLLVM bllvm binary(ies) (experimental)"
             fi
             
-            echo "Checking Linux governance tools (base variant)..."
+            echo "Checking Linux governance tools (single variant)..."
             if [ -d "${ARTIFACTS_DIR}/governance-linux" ] && [ "$(ls -A ${ARTIFACTS_DIR}/governance-linux 2>/dev/null)" ]; then
               LINUX_GOV=$(find "${ARTIFACTS_DIR}/governance-linux" -type f -executable 2>/dev/null | wc -l)
-              echo "✅ Found $LINUX_GOV governance tool(s) (base)"
+              echo "✅ Found $LINUX_GOV governance tool(s)"
             else
-              echo "⚠️  WARNING: Linux governance tools directory not found or empty (base)"
-            fi
-            
-            echo "Checking Linux governance tools (experimental variant)..."
-            if [ -d "${ARTIFACTS_DIR}/governance-experimental-linux" ] && [ "$(ls -A ${ARTIFACTS_DIR}/governance-experimental-linux 2>/dev/null)" ]; then
-              LINUX_EXP_GOV=$(find "${ARTIFACTS_DIR}/governance-experimental-linux" -type f -executable 2>/dev/null | wc -l)
-              echo "✅ Found $LINUX_EXP_GOV governance tool(s) (experimental)"
-            else
-              echo "⚠️  WARNING: Linux governance tools directory not found or empty (experimental)"
+              echo "⚠️  WARNING: Linux governance tools directory not found or empty"
             fi
           fi
           
@@ -521,20 +514,12 @@ jobs:
               echo "✅ Found $WINDOWS_EXP_BLLVM bllvm binary(ies) (experimental)"
             fi
             
-            echo "Checking Windows governance tools (base variant)..."
+            echo "Checking Windows governance tools (single variant)..."
             if [ -d "${ARTIFACTS_DIR}/governance-windows" ] && [ "$(ls -A ${ARTIFACTS_DIR}/governance-windows 2>/dev/null)" ]; then
               WINDOWS_GOV=$(find "${ARTIFACTS_DIR}/governance-windows" -type f -name "*.exe" 2>/dev/null | wc -l)
-              echo "✅ Found $WINDOWS_GOV governance tool(s) (base)"
+              echo "✅ Found $WINDOWS_GOV governance tool(s)"
             else
-              echo "⚠️  WARNING: Windows governance tools directory not found or empty (base)"
-            fi
-            
-            echo "Checking Windows governance tools (experimental variant)..."
-            if [ -d "${ARTIFACTS_DIR}/governance-experimental-windows" ] && [ "$(ls -A ${ARTIFACTS_DIR}/governance-experimental-windows 2>/dev/null)" ]; then
-              WINDOWS_EXP_GOV=$(find "${ARTIFACTS_DIR}/governance-experimental-windows" -type f -name "*.exe" 2>/dev/null | wc -l)
-              echo "✅ Found $WINDOWS_EXP_GOV governance tool(s) (experimental)"
-            else
-              echo "⚠️  WARNING: Windows governance tools directory not found or empty (experimental)"
+              echo "⚠️  WARNING: Windows governance tools directory not found or empty"
             fi
           fi
           
@@ -594,12 +579,8 @@ jobs:
               check_dir="${ARTIFACTS_DIR}/bllvm-experimental-windows"
             elif [[ "$checksum_name" == *"governance-linux"* ]]; then
               check_dir="${ARTIFACTS_DIR}/governance-linux"
-            elif [[ "$checksum_name" == *"governance-experimental-linux"* ]]; then
-              check_dir="${ARTIFACTS_DIR}/governance-experimental-linux"
             elif [[ "$checksum_name" == *"governance-windows"* ]]; then
               check_dir="${ARTIFACTS_DIR}/governance-windows"
-            elif [[ "$checksum_name" == *"governance-experimental-windows"* ]]; then
-              check_dir="${ARTIFACTS_DIR}/governance-experimental-windows"
             else
               echo "⚠️  WARNING: Unknown checksum file format: $checksum_name"
               continue
@@ -655,16 +636,11 @@ jobs:
               echo "❌ ERROR: bllvm Linux experimental binary not found"
             fi
             
-            # Check governance tools (optional but recommended)
+            # Check governance tools (single variant, same for both base and experimental)
             if [ -f "${ARTIFACTS_DIR}/bllvm-governance-${VERSION_TAG}-linux-x86_64.tar.gz" ]; then
-              echo "✅ Found governance tools Linux archive (base)"
+              echo "✅ Found governance tools Linux archive"
             else
-              echo "⚠️  WARNING: Governance tools Linux archive (base) not found"
-            fi
-            if [ -f "${ARTIFACTS_DIR}/bllvm-governance-experimental-${VERSION_TAG}-linux-x86_64.tar.gz" ]; then
-              echo "✅ Found governance tools Linux archive (experimental)"
-            else
-              echo "⚠️  WARNING: Governance tools Linux archive (experimental) not found"
+              echo "⚠️  WARNING: Governance tools Linux archive not found"
             fi
           fi
           
@@ -684,16 +660,11 @@ jobs:
               echo "❌ ERROR: bllvm Windows experimental binary not found"
             fi
             
-            # Check governance tools (optional but recommended)
+            # Check governance tools (single variant, same for both base and experimental)
             if [ -f "${ARTIFACTS_DIR}/bllvm-governance-${VERSION_TAG}-windows-x86_64.zip" ]; then
-              echo "✅ Found governance tools Windows archive (base)"
+              echo "✅ Found governance tools Windows archive"
             else
-              echo "⚠️  WARNING: Governance tools Windows archive (base) not found"
-            fi
-            if [ -f "${ARTIFACTS_DIR}/bllvm-governance-experimental-${VERSION_TAG}-windows-x86_64.zip" ]; then
-              echo "✅ Found governance tools Windows archive (experimental)"
-            else
-              echo "⚠️  WARNING: Governance tools Windows archive (experimental) not found"
+              echo "⚠️  WARNING: Governance tools Windows archive not found"
             fi
           fi
           
@@ -743,8 +714,6 @@ jobs:
             bllvm/artifacts/bllvm-experimental-*.zip
             bllvm/artifacts/bllvm-governance-*.tar.gz
             bllvm/artifacts/bllvm-governance-*.zip
-            bllvm/artifacts/bllvm-governance-experimental-*.tar.gz
-            bllvm/artifacts/bllvm-governance-experimental-*.zip
             bllvm/artifacts/SHA256SUMS-*
           draft: false
           prerelease: true

@@ -183,7 +183,7 @@ create_archive() {
 main() {
     log_info "Collecting artifacts for ${PLATFORM} (variant: ${VARIANT})..."
     
-    # Collect bllvm binary separately
+    # Collect bllvm binary separately (only bllvm has variants)
     if collect_bllvm_binary; then
         # Generate checksum for bllvm binary
         local bllvm_checksum
@@ -212,35 +212,25 @@ main() {
         create_archive "$BLLVM_DIR" "$bllvm_archive" "$bllvm_checksum"
     fi
     
-    # Collect governance binaries
-    collect_governance_binaries
-    
-    if [ -d "$GOVERNANCE_DIR" ] && [ "$(ls -A "$GOVERNANCE_DIR" 2>/dev/null)" ]; then
-        # Generate checksum for governance binaries
-        local gov_checksum
-        if [ "$VARIANT" = "base" ]; then
-            gov_checksum="${ARTIFACTS_DIR}/SHA256SUMS-governance-${PLATFORM}"
-        else
-            gov_checksum="${ARTIFACTS_DIR}/SHA256SUMS-governance-experimental-${PLATFORM}"
-        fi
-        generate_checksums "$GOVERNANCE_DIR" "$gov_checksum"
+    # Collect governance binaries (only collect once, no variants - they're the same regardless)
+    # Only collect in base variant to avoid duplication
+    if [ "$VARIANT" = "base" ]; then
+        collect_governance_binaries
         
-        # Create archive for governance binaries
-        local gov_archive
-        if [ "$VARIANT" = "base" ]; then
+        if [ -d "$GOVERNANCE_DIR" ] && [ "$(ls -A "$GOVERNANCE_DIR" 2>/dev/null)" ]; then
+            # Generate checksum for governance binaries (single variant)
+            local gov_checksum="${ARTIFACTS_DIR}/SHA256SUMS-governance-${PLATFORM}"
+            generate_checksums "$GOVERNANCE_DIR" "$gov_checksum"
+            
+            # Create archive for governance binaries (single variant)
+            local gov_archive
             if [[ "$PLATFORM" == *"windows"* ]]; then
                 gov_archive="bllvm-governance-${PLATFORM}.zip"
             else
                 gov_archive="bllvm-governance-${PLATFORM}.tar.gz"
             fi
-        else
-            if [[ "$PLATFORM" == *"windows"* ]]; then
-                gov_archive="bllvm-governance-experimental-${PLATFORM}.zip"
-            else
-                gov_archive="bllvm-governance-experimental-${PLATFORM}.tar.gz"
-            fi
+            create_archive "$GOVERNANCE_DIR" "$gov_archive" "$gov_checksum"
         fi
-        create_archive "$GOVERNANCE_DIR" "$gov_archive" "$gov_checksum"
     fi
     
     log_success "Artifacts collected in: ${ARTIFACTS_DIR}"
