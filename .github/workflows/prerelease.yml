@@ -538,27 +538,17 @@ jobs:
             fi
           fi
           
-          # Check for SHA256SUMS files (both variants)
+          # Check for SHA256SUMS files (new naming scheme)
           SHA256SUMS_FOUND=0
-          if [ -f "${ARTIFACTS_DIR}/SHA256SUMS-linux-x86_64" ]; then
-            echo "✅ Found SHA256SUMS-linux-x86_64 (base)"
-            SHA256SUMS_FOUND=1
-          fi
-          if [ -f "${ARTIFACTS_DIR}/SHA256SUMS-experimental-linux-x86_64" ]; then
-            echo "✅ Found SHA256SUMS-experimental-linux-x86_64"
-            SHA256SUMS_FOUND=1
-          fi
-          if [ -f "${ARTIFACTS_DIR}/SHA256SUMS-windows-x86_64" ]; then
-            echo "✅ Found SHA256SUMS-windows-x86_64 (base)"
-            SHA256SUMS_FOUND=1
-          fi
-          if [ -f "${ARTIFACTS_DIR}/SHA256SUMS-experimental-windows-x86_64" ]; then
-            echo "✅ Found SHA256SUMS-experimental-windows-x86_64"
-            SHA256SUMS_FOUND=1
-          fi
+          for checksum_file in "${ARTIFACTS_DIR}"/SHA256SUMS-*; do
+            if [ -f "$checksum_file" ]; then
+              echo "✅ Found $(basename "$checksum_file")"
+              SHA256SUMS_FOUND=1
+            fi
+          done
           
           if [ "$SHA256SUMS_FOUND" -eq 0 ]; then
-            echo "⚠️  WARNING: No SHA256SUMS files found (will be created by create-release.sh)"
+            echo "⚠️  WARNING: No SHA256SUMS files found"
           fi
           
           # Check for RELEASE_NOTES.md
