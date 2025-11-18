@@ -581,7 +581,7 @@ fn build_final_config(cli: &Cli) -> (NodeConfig, String, SocketAddr, SocketAddr,
 }
 
 /// Apply feature flags from environment variables
-fn apply_env_feature_flags(_config: &mut NodeConfig, env: &EnvOverrides) {
+fn apply_env_feature_flags(config: &mut NodeConfig, env: &EnvOverrides) {
     // Stratum V2
     if let Some(enabled) = env.stratum_v2 {
         #[cfg(feature = "stratum-v2")]
@@ -647,7 +647,7 @@ fn apply_env_feature_flags(_config: &mut NodeConfig, env: &EnvOverrides) {
 }
 
 /// Apply feature flags from CLI to config
-fn apply_feature_flags(_config: &mut NodeConfig, features: &FeatureFlags) {
+fn apply_feature_flags(config: &mut NodeConfig, features: &FeatureFlags) {
     // Stratum V2
     if features.enable_stratum_v2 || features.disable_stratum_v2 {
         #[cfg(feature = "stratum-v2")]
