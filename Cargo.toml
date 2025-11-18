@@ -31,6 +31,11 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "=1.0.108"
 reqwest = { version = "0.12", features = ["json"], default-features = false }
 
+[features]
+default = []
+# Production optimizations (enables bllvm-node production features)
+production = ["bllvm-node/production"]
+
 [dev-dependencies]
 tempfile = "3.8"
 assert_cmd = "2.0"
