@@ -43,6 +43,8 @@ bip158 = ["bllvm-node/bip158"]
 sigop = ["bllvm-node/sigop"]
 # CTV (CheckTemplateVerify) - passed through from bllvm-consensus via bllvm-protocol
 ctv = ["bllvm-node/utxo-commitments"]
+# Iroh transport support
+iroh = ["bllvm-node/iroh"]
 
 [dev-dependencies]
 tempfile = "3.8"

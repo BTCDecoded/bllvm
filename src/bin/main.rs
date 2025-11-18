@@ -256,7 +256,7 @@ async fn main() -> Result<()> {
             let (config, _, _, _, _) = build_final_config(&cli);
             handle_sync(rpc_addr, &config).await
         }
-        Some(Command::Config { subcommand }) => {
+        Some(Command::Config { ref subcommand }) => {
             let (config, _, _, _, _) = build_final_config(&cli);
             match subcommand {
                 ConfigCommand::Show => handle_config_show(&config),
@@ -264,10 +264,10 @@ async fn main() -> Result<()> {
                 ConfigCommand::Path => handle_config_path(&cli.config),
             }
         }
-        Some(Command::Rpc { method, params, rpc_addr }) => {
+        Some(Command::Rpc { method, ref params, rpc_addr }) => {
             let rpc_addr = rpc_addr.unwrap_or(cli.rpc_addr);
             let (config, _, _, _, _) = build_final_config(&cli);
-            let params: Value = serde_json::from_str(&params)
+            let params: Value = serde_json::from_str(params)
                 .context("Invalid JSON parameters")?;
             handle_rpc(rpc_addr, &method, params, &config).await
         }
@@ -300,9 +300,13 @@ async fn main() -> Result<()> {
             node = node.with_config(config.clone())
                 .map_err(|e| anyhow::anyhow!("Failed to apply config: {}", e))?;
             
-            if let Err(e) = node.with_modules_from_config(&config) {
-                warn!("Failed to configure modules: {}. Continuing without modules.", e);
-            }
+            node = match node.with_modules_from_config(&config) {
+                Ok(n) => n,
+                Err(e) => {
+                    warn!("Failed to configure modules: {}. Continuing without modules.", e);
+                    node
+                }
+            };
 
             tokio::select! {
                 result = node.start() => {
@@ -577,7 +581,7 @@ fn build_final_config(cli: &Cli) -> (NodeConfig, String, SocketAddr, SocketAddr,
 }
 
 /// Apply feature flags from environment variables
-fn apply_env_feature_flags(config: &mut NodeConfig, env: &EnvOverrides) {
+fn apply_env_feature_flags(_config: &mut NodeConfig, env: &EnvOverrides) {
     // Stratum V2
     if let Some(enabled) = env.stratum_v2 {
         #[cfg(feature = "stratum-v2")]
@@ -643,7 +647,7 @@ fn apply_env_feature_flags(config: &mut NodeConfig, env: &EnvOverrides) {
 }
 
 /// Apply feature flags from CLI to config
-fn apply_feature_flags(config: &mut NodeConfig, features: &FeatureFlags) {
+fn apply_feature_flags(_config: &mut NodeConfig, features: &FeatureFlags) {
     // Stratum V2
     if features.enable_stratum_v2 || features.disable_stratum_v2 {
         #[cfg(feature = "stratum-v2")]
@@ -715,7 +719,7 @@ fn apply_feature_flags(config: &mut NodeConfig, features: &FeatureFlags) {
 }
 
 /// Apply environment config overrides (non-feature flags)
-fn apply_env_config_overrides(config: &mut NodeConfig, env: &EnvOverrides) {
+fn apply_env_config_overrides(_config: &mut NodeConfig, env: &EnvOverrides) {
     // Network timing config
     if let Some(target_peer_count) = env.target_peer_count {
         // This would need to be added to NodeConfig if not already present
@@ -771,7 +775,7 @@ fn apply_env_config_overrides(config: &mut NodeConfig, env: &EnvOverrides) {
 }
 
 /// Apply CLI advanced config options
-fn apply_cli_advanced_config(config: &mut NodeConfig, advanced: &AdvancedConfig) {
+fn apply_cli_advanced_config(_config: &mut NodeConfig, advanced: &AdvancedConfig) {
     if let Some(target_peer_count) = advanced.target_peer_count {
         info!("Target peer count set via CLI: {}", target_peer_count);
         // This would need to be added to NodeConfig if not already present
