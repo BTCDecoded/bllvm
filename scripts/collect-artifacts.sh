@@ -153,26 +153,27 @@ create_archive() {
     
     # Create archive with binaries at root (no subdirectory)
     if [[ "$archive_name" == *.tar.gz ]]; then
-        # Use -C to change directory, then archive contents directly
-        tar -czf "$archive_name" -C "$source_dir" . "$checksum_file" 2>/dev/null || {
-            # Fallback: create temp dir structure
-            local temp_dir=$(mktemp -d)
-            cp -r "$source_dir"/* "$temp_dir/" 2>/dev/null || true
-            if [ -f "$checksum_file" ]; then
-                cp "$checksum_file" "$temp_dir/" 2>/dev/null || true
-            fi
-            tar -czf "$archive_name" -C "$temp_dir" . 2>/dev/null || true
-            rm -rf "$temp_dir"
-        }
+        # Create temp dir to combine binaries and checksum file
+        local temp_dir=$(mktemp -d)
+        # Copy binaries to temp dir
+        cp -r "$source_dir"/* "$temp_dir/" 2>/dev/null || true
+        # Copy checksum file with just the filename (not full path)
+        if [ -f "$checksum_file" ]; then
+            cp "$checksum_file" "$temp_dir/$(basename "$checksum_file")" 2>/dev/null || true
+        fi
+        # Create archive from temp dir
+        tar -czf "$archive_name" -C "$temp_dir" . 2>/dev/null || true
+        rm -rf "$temp_dir"
         log_success "Created: ${archive_name}"
     elif [[ "$archive_name" == *.zip ]]; then
         # For zip, cd into directory and add files from there
         pushd "$source_dir" > /dev/null
         zip -r "${ARTIFACTS_DIR}/${archive_name}" . 2>/dev/null || true
         popd > /dev/null
-        # Add checksum file if it exists
+        # Add checksum file with just the filename (not full path)
         if [ -f "$checksum_file" ]; then
-            zip -u "${ARTIFACTS_DIR}/${archive_name}" "$checksum_file" 2>/dev/null || true
+            # Use -j to store just the filename without path
+            zip -j -u "${ARTIFACTS_DIR}/${archive_name}" "$checksum_file" 2>/dev/null || true
         fi
         log_success "Created: ${archive_name}"
     fi
