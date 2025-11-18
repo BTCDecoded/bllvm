@@ -701,6 +701,64 @@ jobs:
           echo ""
           echo "✅ All required release artifacts validated"
       
+      - name: Prepare individual binaries for release
+        run: |
+          BLLVM_DIR="${GITHUB_WORKSPACE}/bllvm"
+          ARTIFACTS_DIR="${BLLVM_DIR}/artifacts"
+          BINARIES_DIR="${ARTIFACTS_DIR}/binaries-individual"
+          
+          mkdir -p "$BINARIES_DIR"
+          
+          # Copy and rename bllvm binaries with descriptive names
+          if [ "${{ inputs.platform }}" = "linux" ] || [ "${{ inputs.platform }}" = "both" ]; then
+            if [ -f "${ARTIFACTS_DIR}/bllvm-linux/bllvm" ]; then
+              cp "${ARTIFACTS_DIR}/bllvm-linux/bllvm" "${BINARIES_DIR}/bllvm-linux-x86_64"
+              chmod +x "${BINARIES_DIR}/bllvm-linux-x86_64"
+              echo "✅ Prepared bllvm-linux-x86_64"
+            fi
+            if [ -f "${ARTIFACTS_DIR}/bllvm-experimental-linux/bllvm" ]; then
+              cp "${ARTIFACTS_DIR}/bllvm-experimental-linux/bllvm" "${BINARIES_DIR}/bllvm-experimental-linux-x86_64"
+              chmod +x "${BINARIES_DIR}/bllvm-experimental-linux-x86_64"
+              echo "✅ Prepared bllvm-experimental-linux-x86_64"
+            fi
+            # Copy governance tools
+            if [ -d "${ARTIFACTS_DIR}/governance-linux" ]; then
+              for tool in "${ARTIFACTS_DIR}"/governance-linux/*; do
+                if [ -f "$tool" ] && [ -x "$tool" ]; then
+                  tool_name=$(basename "$tool")
+                  cp "$tool" "${BINARIES_DIR}/${tool_name}-linux-x86_64"
+                  chmod +x "${BINARIES_DIR}/${tool_name}-linux-x86_64"
+                  echo "✅ Prepared ${tool_name}-linux-x86_64"
+                fi
+              done
+            fi
+          fi
+          
+          if [ "${{ inputs.platform }}" = "windows" ] || [ "${{ inputs.platform }}" = "both" ]; then
+            if [ -f "${ARTIFACTS_DIR}/bllvm-windows/bllvm.exe" ]; then
+              cp "${ARTIFACTS_DIR}/bllvm-windows/bllvm.exe" "${BINARIES_DIR}/bllvm-windows-x86_64.exe"
+              echo "✅ Prepared bllvm-windows-x86_64.exe"
+            fi
+            if [ -f "${ARTIFACTS_DIR}/bllvm-experimental-windows/bllvm.exe" ]; then
+              cp "${ARTIFACTS_DIR}/bllvm-experimental-windows/bllvm.exe" "${BINARIES_DIR}/bllvm-experimental-windows-x86_64.exe"
+              echo "✅ Prepared bllvm-experimental-windows-x86_64.exe"
+            fi
+            # Copy governance tools
+            if [ -d "${ARTIFACTS_DIR}/governance-windows" ]; then
+              for tool in "${ARTIFACTS_DIR}"/governance-windows/*.exe; do
+                if [ -f "$tool" ]; then
+                  tool_name=$(basename "$tool" .exe)
+                  cp "$tool" "${BINARIES_DIR}/${tool_name}-windows-x86_64.exe"
+                  echo "✅ Prepared ${tool_name}-windows-x86_64.exe"
+                fi
+              done
+            fi
+          fi
+          
+          echo ""
+          echo "✅ Individual binaries prepared in ${BINARIES_DIR}"
+          ls -lh "$BINARIES_DIR" || true
+      
       - name: Create GitHub Prerelease
         uses: softprops/action-gh-release@v1
         with:
@@ -715,12 +773,7 @@ jobs:
             bllvm/artifacts/bllvm-governance-*.tar.gz
             bllvm/artifacts/bllvm-governance-*.zip
             bllvm/artifacts/SHA256SUMS-*
-            bllvm/artifacts/bllvm-linux/bllvm
-            bllvm/artifacts/bllvm-experimental-linux/bllvm
-            bllvm/artifacts/bllvm-windows/bllvm.exe
-            bllvm/artifacts/bllvm-experimental-windows/bllvm.exe
-            bllvm/artifacts/governance-linux/*
-            bllvm/artifacts/governance-windows/*
+            bllvm/artifacts/binaries-individual/*
           draft: false
           prerelease: true
         env:
