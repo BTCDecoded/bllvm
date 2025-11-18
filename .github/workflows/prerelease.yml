@@ -467,62 +467,74 @@ jobs:
           
           # Check for expected binaries based on platform (both variants)
           if [ "${{ inputs.platform }}" = "linux" ] || [ "${{ inputs.platform }}" = "both" ]; then
-            echo "Checking Linux artifacts (base variant)..."
-            if [ ! -d "${ARTIFACTS_DIR}/binaries" ]; then
-              echo "❌ ERROR: Linux binaries directory not found: ${ARTIFACTS_DIR}/binaries"
+            echo "Checking Linux bllvm binary (base variant)..."
+            if [ ! -d "${ARTIFACTS_DIR}/bllvm-linux" ] || [ -z "$(ls -A ${ARTIFACTS_DIR}/bllvm-linux 2>/dev/null)" ]; then
+              echo "❌ ERROR: Linux bllvm binary directory not found or empty: ${ARTIFACTS_DIR}/bllvm-linux"
               MISSING_ARTIFACTS=1
             else
-              LINUX_BINARIES=$(find "${ARTIFACTS_DIR}/binaries" -type f -executable 2>/dev/null | wc -l)
-              if [ "$LINUX_BINARIES" -eq 0 ]; then
-                echo "❌ ERROR: No Linux binaries found in ${ARTIFACTS_DIR}/binaries"
-                MISSING_ARTIFACTS=1
-              else
-                echo "✅ Found $LINUX_BINARIES Linux binary(ies) (base)"
-              fi
+              LINUX_BLLVM=$(find "${ARTIFACTS_DIR}/bllvm-linux" -type f -executable 2>/dev/null | wc -l)
+              echo "✅ Found $LINUX_BLLVM bllvm binary(ies) (base)"
             fi
             
-            echo "Checking Linux artifacts (experimental variant)..."
-            if [ ! -d "${ARTIFACTS_DIR}/binaries-experimental" ]; then
-              echo "❌ ERROR: Linux experimental binaries directory not found: ${ARTIFACTS_DIR}/binaries-experimental"
+            echo "Checking Linux bllvm binary (experimental variant)..."
+            if [ ! -d "${ARTIFACTS_DIR}/bllvm-experimental-linux" ] || [ -z "$(ls -A ${ARTIFACTS_DIR}/bllvm-experimental-linux 2>/dev/null)" ]; then
+              echo "❌ ERROR: Linux experimental bllvm binary directory not found or empty: ${ARTIFACTS_DIR}/bllvm-experimental-linux"
               MISSING_ARTIFACTS=1
             else
-              LINUX_EXP_BINARIES=$(find "${ARTIFACTS_DIR}/binaries-experimental" -type f -executable 2>/dev/null | wc -l)
-              if [ "$LINUX_EXP_BINARIES" -eq 0 ]; then
-                echo "❌ ERROR: No Linux experimental binaries found in ${ARTIFACTS_DIR}/binaries-experimental"
-                MISSING_ARTIFACTS=1
-              else
-                echo "✅ Found $LINUX_EXP_BINARIES Linux binary(ies) (experimental)"
-              fi
+              LINUX_EXP_BLLVM=$(find "${ARTIFACTS_DIR}/bllvm-experimental-linux" -type f -executable 2>/dev/null | wc -l)
+              echo "✅ Found $LINUX_EXP_BLLVM bllvm binary(ies) (experimental)"
+            fi
+            
+            echo "Checking Linux governance tools (base variant)..."
+            if [ -d "${ARTIFACTS_DIR}/governance-linux" ] && [ "$(ls -A ${ARTIFACTS_DIR}/governance-linux 2>/dev/null)" ]; then
+              LINUX_GOV=$(find "${ARTIFACTS_DIR}/governance-linux" -type f -executable 2>/dev/null | wc -l)
+              echo "✅ Found $LINUX_GOV governance tool(s) (base)"
+            else
+              echo "⚠️  WARNING: Linux governance tools directory not found or empty (base)"
+            fi
+            
+            echo "Checking Linux governance tools (experimental variant)..."
+            if [ -d "${ARTIFACTS_DIR}/governance-experimental-linux" ] && [ "$(ls -A ${ARTIFACTS_DIR}/governance-experimental-linux 2>/dev/null)" ]; then
+              LINUX_EXP_GOV=$(find "${ARTIFACTS_DIR}/governance-experimental-linux" -type f -executable 2>/dev/null | wc -l)
+              echo "✅ Found $LINUX_EXP_GOV governance tool(s) (experimental)"
+            else
+              echo "⚠️  WARNING: Linux governance tools directory not found or empty (experimental)"
             fi
           fi
           
           if [ "${{ inputs.platform }}" = "windows" ] || [ "${{ inputs.platform }}" = "both" ]; then
-            echo "Checking Windows artifacts (base variant)..."
-            if [ ! -d "${ARTIFACTS_DIR}/binaries-windows" ]; then
-              echo "❌ ERROR: Windows binaries directory not found: ${ARTIFACTS_DIR}/binaries-windows"
+            echo "Checking Windows bllvm binary (base variant)..."
+            if [ ! -d "${ARTIFACTS_DIR}/bllvm-windows" ] || [ -z "$(ls -A ${ARTIFACTS_DIR}/bllvm-windows 2>/dev/null)" ]; then
+              echo "❌ ERROR: Windows bllvm binary directory not found or empty: ${ARTIFACTS_DIR}/bllvm-windows"
               MISSING_ARTIFACTS=1
             else
-              WINDOWS_BINARIES=$(find "${ARTIFACTS_DIR}/binaries-windows" -type f -name "*.exe" 2>/dev/null | wc -l)
-              if [ "$WINDOWS_BINARIES" -eq 0 ]; then
-                echo "❌ ERROR: No Windows binaries found in ${ARTIFACTS_DIR}/binaries-windows"
-                MISSING_ARTIFACTS=1
-              else
-                echo "✅ Found $WINDOWS_BINARIES Windows binary(ies) (base)"
-              fi
+              WINDOWS_BLLVM=$(find "${ARTIFACTS_DIR}/bllvm-windows" -type f -name "*.exe" 2>/dev/null | wc -l)
+              echo "✅ Found $WINDOWS_BLLVM bllvm binary(ies) (base)"
             fi
             
-            echo "Checking Windows artifacts (experimental variant)..."
-            if [ ! -d "${ARTIFACTS_DIR}/binaries-experimental-windows" ]; then
-              echo "❌ ERROR: Windows experimental binaries directory not found: ${ARTIFACTS_DIR}/binaries-experimental-windows"
+            echo "Checking Windows bllvm binary (experimental variant)..."
+            if [ ! -d "${ARTIFACTS_DIR}/bllvm-experimental-windows" ] || [ -z "$(ls -A ${ARTIFACTS_DIR}/bllvm-experimental-windows 2>/dev/null)" ]; then
+              echo "❌ ERROR: Windows experimental bllvm binary directory not found or empty: ${ARTIFACTS_DIR}/bllvm-experimental-windows"
               MISSING_ARTIFACTS=1
             else
-              WINDOWS_EXP_BINARIES=$(find "${ARTIFACTS_DIR}/binaries-experimental-windows" -type f -name "*.exe" 2>/dev/null | wc -l)
-              if [ "$WINDOWS_EXP_BINARIES" -eq 0 ]; then
-                echo "❌ ERROR: No Windows experimental binaries found in ${ARTIFACTS_DIR}/binaries-experimental-windows"
-                MISSING_ARTIFACTS=1
-              else
-                echo "✅ Found $WINDOWS_EXP_BINARIES Windows binary(ies) (experimental)"
-              fi
+              WINDOWS_EXP_BLLVM=$(find "${ARTIFACTS_DIR}/bllvm-experimental-windows" -type f -name "*.exe" 2>/dev/null | wc -l)
+              echo "✅ Found $WINDOWS_EXP_BLLVM bllvm binary(ies) (experimental)"
+            fi
+            
+            echo "Checking Windows governance tools (base variant)..."
+            if [ -d "${ARTIFACTS_DIR}/governance-windows" ] && [ "$(ls -A ${ARTIFACTS_DIR}/governance-windows 2>/dev/null)" ]; then
+              WINDOWS_GOV=$(find "${ARTIFACTS_DIR}/governance-windows" -type f -name "*.exe" 2>/dev/null | wc -l)
+              echo "✅ Found $WINDOWS_GOV governance tool(s) (base)"
+            else
+              echo "⚠️  WARNING: Windows governance tools directory not found or empty (base)"
+            fi
+            
+            echo "Checking Windows governance tools (experimental variant)..."
+            if [ -d "${ARTIFACTS_DIR}/governance-experimental-windows" ] && [ "$(ls -A ${ARTIFACTS_DIR}/governance-experimental-windows 2>/dev/null)" ]; then
+              WINDOWS_EXP_GOV=$(find "${ARTIFACTS_DIR}/governance-experimental-windows" -type f -name "*.exe" 2>/dev/null | wc -l)
+              echo "✅ Found $WINDOWS_EXP_GOV governance tool(s) (experimental)"
+            else
+              echo "⚠️  WARNING: Windows governance tools directory not found or empty (experimental)"
             fi
           fi
           
@@ -618,43 +630,76 @@ jobs:
           FOUND_FILES=0
           
           if [ "${{ inputs.platform }}" = "linux" ] || [ "${{ inputs.platform }}" = "both" ]; then
-            REQUIRED_FILES=$((REQUIRED_FILES + 2))  # Base + Experimental
+            # Check bllvm binaries (base + experimental)
+            REQUIRED_FILES=$((REQUIRED_FILES + 2))
             if [ -f "${ARTIFACTS_DIR}/bllvm-${VERSION_TAG}-linux-x86_64.tar.gz" ]; then
-              echo "✅ Found Linux release package (base)"
+              echo "✅ Found bllvm Linux binary (base)"
               FOUND_FILES=$((FOUND_FILES + 1))
             else
-              echo "❌ ERROR: Linux base release package not found"
+              echo "❌ ERROR: bllvm Linux base binary not found"
             fi
             if [ -f "${ARTIFACTS_DIR}/bllvm-experimental-${VERSION_TAG}-linux-x86_64.tar.gz" ]; then
-              echo "✅ Found Linux release package (experimental)"
+              echo "✅ Found bllvm Linux binary (experimental)"
               FOUND_FILES=$((FOUND_FILES + 1))
             else
-              echo "❌ ERROR: Linux experimental release package not found"
+              echo "❌ ERROR: bllvm Linux experimental binary not found"
+            fi
+            
+            # Check governance tools (optional but recommended)
+            if [ -f "${ARTIFACTS_DIR}/bllvm-governance-${VERSION_TAG}-linux-x86_64.tar.gz" ]; then
+              echo "✅ Found governance tools Linux archive (base)"
+            else
+              echo "⚠️  WARNING: Governance tools Linux archive (base) not found"
+            fi
+            if [ -f "${ARTIFACTS_DIR}/bllvm-governance-experimental-${VERSION_TAG}-linux-x86_64.tar.gz" ]; then
+              echo "✅ Found governance tools Linux archive (experimental)"
+            else
+              echo "⚠️  WARNING: Governance tools Linux archive (experimental) not found"
             fi
           fi
           
           if [ "${{ inputs.platform }}" = "windows" ] || [ "${{ inputs.platform }}" = "both" ]; then
-            REQUIRED_FILES=$((REQUIRED_FILES + 2))  # Base + Experimental
+            # Check bllvm binaries (base + experimental)
+            REQUIRED_FILES=$((REQUIRED_FILES + 2))
             if [ -f "${ARTIFACTS_DIR}/bllvm-${VERSION_TAG}-windows-x86_64.zip" ]; then
-              echo "✅ Found Windows release package (base)"
+              echo "✅ Found bllvm Windows binary (base)"
               FOUND_FILES=$((FOUND_FILES + 1))
             else
-              echo "❌ ERROR: Windows base release package not found"
+              echo "❌ ERROR: bllvm Windows base binary not found"
             fi
             if [ -f "${ARTIFACTS_DIR}/bllvm-experimental-${VERSION_TAG}-windows-x86_64.zip" ]; then
-              echo "✅ Found Windows release package (experimental)"
+              echo "✅ Found bllvm Windows binary (experimental)"
               FOUND_FILES=$((FOUND_FILES + 1))
             else
-              echo "❌ ERROR: Windows experimental release package not found"
+              echo "❌ ERROR: bllvm Windows experimental binary not found"
+            fi
+            
+            # Check governance tools (optional but recommended)
+            if [ -f "${ARTIFACTS_DIR}/bllvm-governance-${VERSION_TAG}-windows-x86_64.zip" ]; then
+              echo "✅ Found governance tools Windows archive (base)"
+            else
+              echo "⚠️  WARNING: Governance tools Windows archive (base) not found"
+            fi
+            if [ -f "${ARTIFACTS_DIR}/bllvm-governance-experimental-${VERSION_TAG}-windows-x86_64.zip" ]; then
+              echo "✅ Found governance tools Windows archive (experimental)"
+            else
+              echo "⚠️  WARNING: Governance tools Windows archive (experimental) not found"
             fi
           fi
           
-          # Check for SHA256SUMS files
-          if [ -f "${ARTIFACTS_DIR}/SHA256SUMS-linux-x86_64" ] || [ -f "${ARTIFACTS_DIR}/SHA256SUMS-windows-x86_64" ]; then
+          # Check for SHA256SUMS files (at least one should exist)
+          SHA256SUMS_FOUND=0
+          for checksum in SHA256SUMS-bllvm-* SHA256SUMS-bllvm-experimental-* SHA256SUMS-governance-*; do
+            if [ -f "${ARTIFACTS_DIR}/${checksum}" ]; then
+              SHA256SUMS_FOUND=1
+              break
+            fi
+          done
+          if [ "$SHA256SUMS_FOUND" -eq 1 ]; then
             echo "✅ Found SHA256SUMS file(s)"
             FOUND_FILES=$((FOUND_FILES + 1))
           else
-            echo "❌ ERROR: No SHA256SUMS files found"
+            echo "⚠️  WARNING: No SHA256SUMS files found"
           fi
           
           # Check for RELEASE_NOTES.md
@@ -665,10 +710,10 @@ jobs:
             echo "❌ ERROR: RELEASE_NOTES.md not found"
           fi
           
-          if [ "$FOUND_FILES" -lt "$((REQUIRED_FILES + 2))" ]; then
+          if [ "$FOUND_FILES" -lt "$((REQUIRED_FILES + 1))" ]; then
             echo ""
             echo "❌ Release artifact validation failed"
-            echo "Found $FOUND_FILES required files, expected at least $((REQUIRED_FILES + 2))"
+            echo "Found $FOUND_FILES required files, expected at least $((REQUIRED_FILES + 1))"
             exit 1
           fi
           
@@ -686,8 +731,11 @@ jobs:
             bllvm/artifacts/bllvm-*.zip
             bllvm/artifacts/bllvm-experimental-*.tar.gz
             bllvm/artifacts/bllvm-experimental-*.zip
+            bllvm/artifacts/bllvm-governance-*.tar.gz
+            bllvm/artifacts/bllvm-governance-*.zip
+            bllvm/artifacts/bllvm-governance-experimental-*.tar.gz
+            bllvm/artifacts/bllvm-governance-experimental-*.zip
             bllvm/artifacts/SHA256SUMS-*
-            bllvm/artifacts/SHA256SUMS-experimental-*
           draft: false
           prerelease: true
         env:

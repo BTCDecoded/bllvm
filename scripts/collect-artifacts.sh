@@ -1,6 +1,7 @@
 #!/bin/bash
 #
 # Collect all built binaries into release artifacts
+# Creates separate archives for bllvm binary and governance tools
 #
 
 set -euo pipefail
@@ -23,17 +24,21 @@ if [[ "$PLATFORM" == *"windows"* ]]; then
     TARGET_DIR="target/x86_64-pc-windows-gnu/release"
     BIN_EXT=".exe"
     if [ "$VARIANT" = "base" ]; then
-        BINARIES_DIR="${ARTIFACTS_DIR}/binaries-windows"
+        BLLVM_DIR="${ARTIFACTS_DIR}/bllvm-windows"
+        GOVERNANCE_DIR="${ARTIFACTS_DIR}/governance-windows"
     else
-        BINARIES_DIR="${ARTIFACTS_DIR}/binaries-experimental-windows"
+        BLLVM_DIR="${ARTIFACTS_DIR}/bllvm-experimental-windows"
+        GOVERNANCE_DIR="${ARTIFACTS_DIR}/governance-experimental-windows"
     fi
 else
     TARGET_DIR="target/release"
     BIN_EXT=""
     if [ "$VARIANT" = "base" ]; then
-        BINARIES_DIR="${ARTIFACTS_DIR}/binaries"
+        BLLVM_DIR="${ARTIFACTS_DIR}/bllvm-linux"
+        GOVERNANCE_DIR="${ARTIFACTS_DIR}/governance-linux"
     else
-        BINARIES_DIR="${ARTIFACTS_DIR}/binaries-experimental"
+        BLLVM_DIR="${ARTIFACTS_DIR}/bllvm-experimental-linux"
+        GOVERNANCE_DIR="${ARTIFACTS_DIR}/governance-experimental-linux"
     fi
 fi
 
@@ -55,39 +60,72 @@ log_warn() {
     echo "[WARN] $1"
 }
 
-collect_repo_binaries() {
-    local repo=$1
+collect_bllvm_binary() {
+    local repo="bllvm"
     local repo_path="${PARENT_DIR}/${repo}"
-    local binaries="${REPO_BINARIES[$repo]:-}"
+    local binary="bllvm"
+    local bin_path="${repo_path}/${TARGET_DIR}/${binary}${BIN_EXT}"
     
-    if [ -z "$binaries" ]; then
-        return 0  # No binaries for this repo
+    mkdir -p "$BLLVM_DIR"
+    
+    if [ -f "$bin_path" ]; then
+        cp "$bin_path" "${BLLVM_DIR}/"
+        log_success "Collected: ${binary}${BIN_EXT}"
+        return 0
+    else
+        log_warn "Binary not found: ${bin_path}"
+        return 1
     fi
+}
+
+collect_governance_binaries() {
+    mkdir -p "$GOVERNANCE_DIR"
+    
+    # Collect bllvm-sdk binaries
+    local repo="bllvm-sdk"
+    local repo_path="${PARENT_DIR}/${repo}"
+    local binaries="${REPO_BINARIES[$repo]}"
     
     for binary in $binaries; do
         local bin_path="${repo_path}/${TARGET_DIR}/${binary}${BIN_EXT}"
-        
         if [ -f "$bin_path" ]; then
-            cp "$bin_path" "${BINARIES_DIR}/"
+            cp "$bin_path" "${GOVERNANCE_DIR}/"
             log_success "Collected: ${binary}${BIN_EXT}"
         else
             log_warn "Binary not found: ${bin_path}"
         fi
     done
+    
+    # Collect bllvm-commons binaries (Linux only)
+    if [[ "$PLATFORM" != *"windows"* ]]; then
+        local repo="bllvm-commons"
+        local repo_path="${PARENT_DIR}/${repo}"
+        local binaries="${REPO_BINARIES[$repo]}"
+        
+        for binary in $binaries; do
+            local bin_path="${repo_path}/${TARGET_DIR}/${binary}${BIN_EXT}"
+            if [ -f "$bin_path" ]; then
+                cp "$bin_path" "${GOVERNANCE_DIR}/"
+                log_success "Collected: ${binary}${BIN_EXT}"
+            else
+                log_warn "Binary not found: ${bin_path}"
+            fi
+        done
+    fi
 }
 
 generate_checksums() {
-    log_info "Generating checksums for ${PLATFORM} (variant: ${VARIANT})..."
+    local dir=$1
+    local checksum_file=$2
     
-    pushd "$BINARIES_DIR" > /dev/null
-    
-    # Base variant uses SHA256SUMS-{platform}, experimental uses SHA256SUMS-experimental-{platform}
-    local checksum_file
-    if [ "$VARIANT" = "base" ]; then
-        checksum_file="${ARTIFACTS_DIR}/SHA256SUMS-${PLATFORM}"
-    else
-        checksum_file="${ARTIFACTS_DIR}/SHA256SUMS-experimental-${PLATFORM}"
+    if [ ! -d "$dir" ] || [ -z "$(ls -A "$dir" 2>/dev/null)" ]; then
+        return 0
     fi
+    
+    log_info "Generating checksums for $(basename "$dir")..."
+    
+    pushd "$dir" > /dev/null
+    
     if command -v sha256sum &> /dev/null; then
         sha256sum * > "$checksum_file" 2>/dev/null || true
         log_success "Generated ${checksum_file}"
@@ -101,54 +139,42 @@ generate_checksums() {
     popd > /dev/null
 }
 
-create_archives() {
-    log_info "Creating release archives for ${PLATFORM} (variant: ${VARIANT})..."
+create_archive() {
+    local source_dir=$1
+    local archive_name=$2
+    local checksum_file=$3
     
-    # Base variant uses bllvm-{version}-{platform}, experimental uses bllvm-experimental-{version}-{platform}
-    # Note: version will be added by create-release.sh, here we just set the base name
-    local archive_base
-    if [ "$VARIANT" = "base" ]; then
-        archive_base="bllvm-${PLATFORM}"
-    else
-        archive_base="bllvm-experimental-${PLATFORM}"
-    fi
-    
-    # Checksum file name
-    local checksum_file
-    if [ "$VARIANT" = "base" ]; then
-        checksum_file="SHA256SUMS-${PLATFORM}"
-    else
-        checksum_file="SHA256SUMS-experimental-${PLATFORM}"
+    if [ ! -d "$source_dir" ] || [ -z "$(ls -A "$source_dir" 2>/dev/null)" ]; then
+        log_warn "No binaries found in $source_dir, skipping archive creation"
+        return 0
     fi
     
     pushd "$ARTIFACTS_DIR" > /dev/null
     
-    # Determine binaries directory name
-    local bin_dir_name
-    if [[ "$PLATFORM" == *"windows"* ]]; then
-        if [ "$VARIANT" = "base" ]; then
-            bin_dir_name="binaries-windows"
-        else
-            bin_dir_name="binaries-experimental-windows"
+    # Create archive with binaries at root (no subdirectory)
+    if [[ "$archive_name" == *.tar.gz ]]; then
+        # Use -C to change directory, then archive contents directly
+        tar -czf "$archive_name" -C "$source_dir" . "$checksum_file" 2>/dev/null || {
+            # Fallback: create temp dir structure
+            local temp_dir=$(mktemp -d)
+            cp -r "$source_dir"/* "$temp_dir/" 2>/dev/null || true
+            if [ -f "$checksum_file" ]; then
+                cp "$checksum_file" "$temp_dir/" 2>/dev/null || true
+            fi
+            tar -czf "$archive_name" -C "$temp_dir" . 2>/dev/null || true
+            rm -rf "$temp_dir"
+        }
+        log_success "Created: ${archive_name}"
+    elif [[ "$archive_name" == *.zip ]]; then
+        # For zip, cd into directory and add files from there
+        pushd "$source_dir" > /dev/null
+        zip -r "${ARTIFACTS_DIR}/${archive_name}" . 2>/dev/null || true
+        popd > /dev/null
+        # Add checksum file if it exists
+        if [ -f "$checksum_file" ]; then
+            zip -u "${ARTIFACTS_DIR}/${archive_name}" "$checksum_file" 2>/dev/null || true
         fi
-    else
-        if [ "$VARIANT" = "base" ]; then
-            bin_dir_name="binaries"
-        else
-            bin_dir_name="binaries-experimental"
-        fi
-    fi
-    
-    # Create tar.gz (skip for Windows, use zip instead)
-    if [[ "$PLATFORM" != *"windows"* ]] && [ -d "$bin_dir_name" ] && [ "$(ls -A $bin_dir_name)" ]; then
-        tar -czf "${archive_base}.tar.gz" "$bin_dir_name/" "$checksum_file" 2>/dev/null || true
-        log_success "Created: ${archive_base}.tar.gz"
-    fi
-        
-    # Create zip (preferred for Windows, also available for Linux)
-    if command -v zip &> /dev/null && [ -d "$bin_dir_name" ] && [ "$(ls -A $bin_dir_name)" ]; then
-        zip -r "${archive_base}.zip" "$bin_dir_name/" "$checksum_file" 2>/dev/null || true
-        log_success "Created: ${archive_base}.zip"
+        log_success "Created: ${archive_name}"
     fi
     
     popd > /dev/null
@@ -157,29 +183,67 @@ create_archives() {
 main() {
     log_info "Collecting artifacts for ${PLATFORM} (variant: ${VARIANT})..."
     
-    mkdir -p "$BINARIES_DIR"
-    
-    # Collect binaries from each repo
-    # Note: bllvm-commons may not cross-compile easily, skip for Windows for now
-    if [[ "$PLATFORM" == *"windows"* ]]; then
-        for repo in bllvm bllvm-sdk; do
-            collect_repo_binaries "$repo"
-        done
-    else
-        for repo in bllvm bllvm-sdk bllvm-commons; do
-        collect_repo_binaries "$repo"
-    done
+    # Collect bllvm binary separately
+    if collect_bllvm_binary; then
+        # Generate checksum for bllvm binary
+        local bllvm_checksum
+        if [ "$VARIANT" = "base" ]; then
+            bllvm_checksum="${ARTIFACTS_DIR}/SHA256SUMS-bllvm-${PLATFORM}"
+        else
+            bllvm_checksum="${ARTIFACTS_DIR}/SHA256SUMS-bllvm-experimental-${PLATFORM}"
+        fi
+        generate_checksums "$BLLVM_DIR" "$bllvm_checksum"
+        
+        # Create archive for bllvm binary
+        local bllvm_archive
+        if [ "$VARIANT" = "base" ]; then
+            if [[ "$PLATFORM" == *"windows"* ]]; then
+                bllvm_archive="bllvm-${PLATFORM}.zip"
+            else
+                bllvm_archive="bllvm-${PLATFORM}.tar.gz"
+            fi
+        else
+            if [[ "$PLATFORM" == *"windows"* ]]; then
+                bllvm_archive="bllvm-experimental-${PLATFORM}.zip"
+            else
+                bllvm_archive="bllvm-experimental-${PLATFORM}.tar.gz"
+            fi
+        fi
+        create_archive "$BLLVM_DIR" "$bllvm_archive" "$bllvm_checksum"
     fi
     
-    # Generate checksums
-    if [ "$(ls -A ${BINARIES_DIR} 2>/dev/null)" ]; then
-        generate_checksums
-        create_archives
-        log_success "Artifacts collected in: ${ARTIFACTS_DIR}"
-    else
-        log_warn "No binaries found to collect for ${PLATFORM}"
+    # Collect governance binaries
+    collect_governance_binaries
+    
+    if [ -d "$GOVERNANCE_DIR" ] && [ "$(ls -A "$GOVERNANCE_DIR" 2>/dev/null)" ]; then
+        # Generate checksum for governance binaries
+        local gov_checksum
+        if [ "$VARIANT" = "base" ]; then
+            gov_checksum="${ARTIFACTS_DIR}/SHA256SUMS-governance-${PLATFORM}"
+        else
+            gov_checksum="${ARTIFACTS_DIR}/SHA256SUMS-governance-experimental-${PLATFORM}"
+        fi
+        generate_checksums "$GOVERNANCE_DIR" "$gov_checksum"
+        
+        # Create archive for governance binaries
+        local gov_archive
+        if [ "$VARIANT" = "base" ]; then
+            if [[ "$PLATFORM" == *"windows"* ]]; then
+                gov_archive="bllvm-governance-${PLATFORM}.zip"
+            else
+                gov_archive="bllvm-governance-${PLATFORM}.tar.gz"
+            fi
+        else
+            if [[ "$PLATFORM" == *"windows"* ]]; then
+                gov_archive="bllvm-governance-experimental-${PLATFORM}.zip"
+            else
+                gov_archive="bllvm-governance-experimental-${PLATFORM}.tar.gz"
+            fi
+        fi
+        create_archive "$GOVERNANCE_DIR" "$gov_archive" "$gov_checksum"
     fi
+    
+    log_success "Artifacts collected in: ${ARTIFACTS_DIR}"
 }
 
 main "$@"
-

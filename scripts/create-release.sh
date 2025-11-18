@@ -140,30 +140,39 @@ rename_archives() {
     
     pushd "$ARTIFACTS_DIR" > /dev/null
     
-    # Rename base variant archives
+    # Rename all archives to include version tag
     for platform in linux-x86_64 windows-x86_64; do
-        # Rename tar.gz files
-        if [ -f "bllvm-${platform}.tar.gz" ]; then
-            mv "bllvm-${platform}.tar.gz" "bllvm-${VERSION_TAG}-${platform}.tar.gz"
-            log_success "Renamed: bllvm-${platform}.tar.gz -> bllvm-${VERSION_TAG}-${platform}.tar.gz"
-        fi
+        # Base variant bllvm binary
+        for ext in tar.gz zip; do
+            if [ -f "bllvm-${platform}.${ext}" ]; then
+                mv "bllvm-${platform}.${ext}" "bllvm-${VERSION_TAG}-${platform}.${ext}"
+                log_success "Renamed: bllvm-${platform}.${ext} -> bllvm-${VERSION_TAG}-${platform}.${ext}"
+            fi
+        done
         
-        # Rename zip files
-        if [ -f "bllvm-${platform}.zip" ]; then
-            mv "bllvm-${platform}.zip" "bllvm-${VERSION_TAG}-${platform}.zip"
-            log_success "Renamed: bllvm-${platform}.zip -> bllvm-${VERSION_TAG}-${platform}.zip"
-        fi
+        # Experimental variant bllvm binary
+        for ext in tar.gz zip; do
+            if [ -f "bllvm-experimental-${platform}.${ext}" ]; then
+                mv "bllvm-experimental-${platform}.${ext}" "bllvm-experimental-${VERSION_TAG}-${platform}.${ext}"
+                log_success "Renamed: bllvm-experimental-${platform}.${ext} -> bllvm-experimental-${VERSION_TAG}-${platform}.${ext}"
+            fi
+        done
         
-        # Rename experimental variant archives
-        if [ -f "bllvm-experimental-${platform}.tar.gz" ]; then
-            mv "bllvm-experimental-${platform}.tar.gz" "bllvm-experimental-${VERSION_TAG}-${platform}.tar.gz"
-            log_success "Renamed: bllvm-experimental-${platform}.tar.gz -> bllvm-experimental-${VERSION_TAG}-${platform}.tar.gz"
-        fi
+        # Governance tools (base variant)
+        for ext in tar.gz zip; do
+            if [ -f "bllvm-governance-${platform}.${ext}" ]; then
+                mv "bllvm-governance-${platform}.${ext}" "bllvm-governance-${VERSION_TAG}-${platform}.${ext}"
+                log_success "Renamed: bllvm-governance-${platform}.${ext} -> bllvm-governance-${VERSION_TAG}-${platform}.${ext}"
+            fi
+        done
         
-        if [ -f "bllvm-experimental-${platform}.zip" ]; then
-            mv "bllvm-experimental-${platform}.zip" "bllvm-experimental-${VERSION_TAG}-${platform}.zip"
-            log_success "Renamed: bllvm-experimental-${platform}.zip -> bllvm-experimental-${VERSION_TAG}-${platform}.zip"
-        fi
+        # Governance tools (experimental variant)
+        for ext in tar.gz zip; do
+            if [ -f "bllvm-governance-experimental-${platform}.${ext}" ]; then
+                mv "bllvm-governance-experimental-${platform}.${ext}" "bllvm-governance-experimental-${VERSION_TAG}-${platform}.${ext}"
+                log_success "Renamed: bllvm-governance-experimental-${platform}.${ext} -> bllvm-governance-experimental-${VERSION_TAG}-${platform}.${ext}"
+            fi
+        done
     done
     
     popd > /dev/null
