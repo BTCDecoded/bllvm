@@ -200,17 +200,15 @@ build_repo() {
     # Enable incremental compilation for faster builds
     export CARGO_INCREMENTAL="${CARGO_INCREMENTAL:-1}"
     
+    # For release mode, update Cargo.lock first, then use --locked for reproducible builds
+    if [ "$MODE" == "release" ]; then
+        log_info "Updating Cargo.lock for reproducible build..."
+        cargo update --workspace
+    fi
+    
     # Build command with features
-    # For release mode, update lock file if needed, then use --locked for reproducible builds
     local build_cmd="cargo build --release"
     if [ "$MODE" == "release" ]; then
-        # Check if lock file needs updating
-        if ! cargo build --release --locked --dry-run >/dev/null 2>&1; then
-            if cargo build --release --locked --dry-run 2>&1 | grep -q "lock file.*needs to be updated"; then
-                log_warn "Lock file outdated, updating it first..."
-                cargo update --workspace
-            fi
-        fi
         build_cmd="cargo build --release --locked"
     fi
     if [ -n "$features" ]; then
