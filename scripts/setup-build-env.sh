@@ -50,15 +50,18 @@ clone_or_update_repo() {
                 # TODO: In Phase 2, use exact tag versions for deterministic builds
                 log_info "Tag ${TAG} found, but using latest main for Phase 1 prerelease (bug fixes)"
                 git checkout main 2>/dev/null || git checkout master 2>/dev/null
+                git fetch origin main 2>/dev/null || git fetch origin master 2>/dev/null || true
                 git reset --hard origin/main 2>/dev/null || git reset --hard origin/master 2>/dev/null || true
             else
                 log_info "Tag ${TAG} not found in ${repo}, using latest main..."
                 git checkout main 2>/dev/null || git checkout master 2>/dev/null
+                git fetch origin main 2>/dev/null || git fetch origin master 2>/dev/null || true
                 git reset --hard origin/main 2>/dev/null || git reset --hard origin/master 2>/dev/null || true
             fi
         else
             # Update to latest
             git checkout main 2>/dev/null || git checkout master 2>/dev/null
+            git fetch origin main 2>/dev/null || git fetch origin master 2>/dev/null || true
             git reset --hard origin/main 2>/dev/null || git reset --hard origin/master 2>/dev/null || true
         fi
         
