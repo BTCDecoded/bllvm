@@ -41,8 +41,8 @@ dandelion = ["bllvm-node/dandelion"]
 stratum-v2 = ["bllvm-node/stratum-v2"]
 bip158 = ["bllvm-node/bip158"]
 sigop = ["bllvm-node/sigop"]
-# CTV (CheckTemplateVerify) - passed through from bllvm-consensus via bllvm-protocol
-ctv = ["bllvm-node/utxo-commitments"]
+# CTV (CheckTemplateVerify) - passed through from bllvm-consensus via bllvm-protocol and bllvm-node
+ctv = ["bllvm-node/ctv"]
 # Iroh transport support
 iroh = ["bllvm-node/iroh"]
 
