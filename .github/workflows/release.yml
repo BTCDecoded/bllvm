@@ -32,6 +32,10 @@ jobs:
           ref: main
           fetch-depth: 0
       
+      - uses: Swatinem/rust-cache@v2
+        with:
+          prefix-key: "v1-rust"
+      
       - name: Setup Rust toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
@@ -222,7 +226,7 @@ jobs:
               # Build with experimental features
               if [ "$repo" = "bllvm" ]; then
                 # bllvm inherits from bllvm-node, need to build with experimental features
-                if cargo build --release --target x86_64-pc-windows-gnu --features production,utxo-commitments,dandelion,stratum-v2,bip158,sigop; then
+                if cargo build --release --target x86_64-pc-windows-gnu --features production,utxo-commitments,ctv,dandelion,stratum-v2,bip158,sigop; then
                   echo "✅ Successfully built $repo for Windows (experimental)"
                 else
                   echo "❌ Windows build failed for $repo (experimental variant)"

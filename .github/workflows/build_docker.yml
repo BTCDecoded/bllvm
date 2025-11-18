@@ -66,6 +66,10 @@ jobs:
           repository: ${{ github.repository_owner }}/${{ inputs.repo }}
           ref: ${{ inputs.ref }}
 
+      - uses: Swatinem/rust-cache@v2
+        with:
+          prefix-key: "v1-rust"
+
       - name: Setup local cache system (for source)
         if: ${{ inputs.use_cache }}
         id: setup-cache

@@ -25,6 +25,10 @@ jobs:
           ref: main
           fetch-depth: 0
       
+      - uses: Swatinem/rust-cache@v2
+        with:
+          prefix-key: "v1-rust"
+      
       - name: Generate nightly version tag
         id: version
         run: |
