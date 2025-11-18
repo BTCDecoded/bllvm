@@ -316,9 +316,20 @@ jobs:
               cd "${PARENT_DIR}/${repo}"
               
               # Clean and rebuild with same flags as first build
+              # Use the same feature flags as build.sh uses for base variant
               cargo clean
               export CARGO_INCREMENTAL="${CARGO_INCREMENTAL:-1}"
-              if cargo build --release --locked --features production 2>&1 | tee /tmp/${repo}-rebuild.log; then
+              
+              # Determine features based on repo (matching build.sh logic)
+              if [ "$repo" = "bllvm" ] || [ "$repo" = "bllvm-consensus" ] || [ "$repo" = "bllvm-protocol" ] || [ "$repo" = "bllvm-node" ]; then
+                # These repos have production feature
+                BUILD_CMD="cargo build --release --locked --features production"
+              else
+                # bllvm-sdk uses default features
+                BUILD_CMD="cargo build --release --locked"
+              fi
+              
+              if eval "$BUILD_CMD" 2>&1 | tee /tmp/${repo}-rebuild.log; then
                 # Generate second hash set
                 find target/release -maxdepth 1 -type f -executable -print0 | xargs -0 sha256sum > /tmp/${repo}-build2-hashes.txt 2>/dev/null || true
                 if [ -f "Cargo.lock" ]; then
@@ -341,6 +352,8 @@ jobs:
                 fi
               else
                 echo "⚠️  WARNING: ${repo} (base): Rebuild failed, skipping verification"
+                echo "Rebuild log (last 50 lines):"
+                tail -50 /tmp/${repo}-rebuild.log || true
                 FAILED_REPOS+=("${repo}")
               fi
               cd - > /dev/null
@@ -363,10 +376,29 @@ jobs:
       - name: Run tests (skip doctests for Phase 1 prerelease)
         run: |
           cd ${{ github.workspace }}
+          FAILED_REPOS=()
+          
           for repo in bllvm-consensus bllvm-protocol bllvm-node bllvm-sdk; do
             if [ -d "$repo" ]; then
+              echo "=========================================="
               echo "Running tests in $repo (skipping doctests and CI-problematic tests)..."
+              echo "=========================================="
               cd "$repo"
+              
+              # First, try to build tests to catch compilation errors early
+              echo "Building tests for $repo..."
+              if ! cargo build --release --all-features --tests 2>&1 | tee /tmp/${repo}-test-build.log; then
+                echo "❌ Test compilation failed in $repo"
+                echo "Build log (last 100 lines):"
+                tail -100 /tmp/${repo}-test-build.log || true
+                FAILED_REPOS+=("$repo")
+                cd ..
+                continue
+              fi
+              
+              echo "✅ Tests compiled successfully for $repo"
+              echo "Running tests..."
+              
               # Skip doctests for Phase 1 prerelease
               # --lib --bins --tests excludes --doc (doctests)
               # Skip tests that hang in CI environment
@@ -374,26 +406,38 @@ jobs:
               # Run tests with single thread to avoid resource contention
               # Skip tests that hang in CI - use filter to exclude them
               # The test was removed but --skip is harmless if test doesn't exist
-              timeout 1800 cargo test --release --all-features --lib --bins --tests -- --test-threads=1 --skip test_handle_incoming_wire_tcp_enqueues_pkgtxn 2>&1 | tee /tmp/test_output.log || {
+              if timeout 1800 cargo test --release --all-features --lib --bins --tests -- --test-threads=1 --skip test_handle_incoming_wire_tcp_enqueues_pkgtxn 2>&1 | tee /tmp/${repo}-test_output.log; then
+                echo "✅ Tests passed for $repo"
+              else
                 EXIT_CODE=$?
                 if [ $EXIT_CODE -eq 124 ]; then
-                  echo "Tests timed out in $repo (exceeded 30 minutes)"
-                  echo "Last 50 lines of test output:"
-                  tail -50 /tmp/test_output.log || true
+                  echo "❌ Tests timed out in $repo (exceeded 30 minutes)"
+                  echo "Last 100 lines of test output:"
+                  tail -100 /tmp/${repo}-test_output.log || true
                 else
-                  echo "Tests failed in $repo"
-                  echo "Last 50 lines of test output:"
-                  tail -50 /tmp/test_output.log || true
+                  echo "❌ Tests failed in $repo"
+                  echo "Last 100 lines of test output:"
+                  tail -100 /tmp/${repo}-test_output.log || true
                 fi
-                exit 1
-              }
+                FAILED_REPOS+=("$repo")
+              fi
               cd ..
             fi
           done
+          
+          if [ ${#FAILED_REPOS[@]} -gt 0 ]; then
+            echo ""
+            echo "❌ Tests failed in the following repos: ${FAILED_REPOS[*]}"
+            exit 1
+          else
+            echo ""
+            echo "✅ All tests passed"
+          fi
         env:
           PARENT_DIR: ${{ github.workspace }}
           CI: true
           GITHUB_ACTIONS: true
+          RUSTFLAGS: "-C debuginfo=0"
       
       - name: Collect artifacts (base variant)
         run: |
