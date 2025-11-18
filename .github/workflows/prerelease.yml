@@ -34,11 +34,11 @@ jobs:
     runs-on: [self-hosted, Linux, X64]
     timeout-minutes: 120
     steps:
-      - name: Checkout commons
+      - name: Checkout bllvm
         uses: actions/checkout@v4
         with:
-          repository: BTCDecoded/commons
-          path: commons
+          repository: BTCDecoded/bllvm
+          path: bllvm
           ref: main
           fetch-depth: 0
       
@@ -121,8 +121,8 @@ jobs:
       
       - name: Checkout all repos at version
         run: |
-          chmod +x commons/scripts/*.sh
-          commons/scripts/setup-build-env.sh ${{ inputs.version_tag }}
+          chmod +x bllvm/scripts/*.sh
+          bllvm/scripts/setup-build-env.sh ${{ inputs.version_tag }}
         env:
           GITHUB_TOKEN: ${{ secrets.REPO_ACCESS_TOKEN }}
           PARENT_DIR: ${{ github.workspace }}
@@ -181,7 +181,7 @@ jobs:
             echo "⚠️  CARGO_BUILD_JOBS is set to 0, unsetting it..."
             unset CARGO_BUILD_JOBS
           fi
-          commons/build.sh --mode release --variant base
+          bllvm/build.sh --mode release --variant base
           
           # Save hashes from first build for deterministic verification
           echo "Saving hashes from first build for deterministic verification..."
@@ -208,7 +208,7 @@ jobs:
             echo "⚠️  CARGO_BUILD_JOBS is set to 0, unsetting it..."
             unset CARGO_BUILD_JOBS
           fi
-          commons/build.sh --mode release --variant experimental
+          bllvm/build.sh --mode release --variant experimental
         env:
           PARENT_DIR: ${{ github.workspace }}
           RUSTFLAGS: "-C debuginfo=0"  # Reduce debug info for faster builds
@@ -387,19 +387,19 @@ jobs:
       - name: Collect artifacts (base variant)
         run: |
           if [ "${{ inputs.platform }}" = "linux" ] || [ "${{ inputs.platform }}" = "both" ]; then
-            commons/scripts/collect-artifacts.sh linux-x86_64 base
+            bllvm/scripts/collect-artifacts.sh linux-x86_64 base
           fi
           if [ "${{ inputs.platform }}" = "windows" ] || [ "${{ inputs.platform }}" = "both" ]; then
-            commons/scripts/collect-artifacts.sh windows-x86_64 base
+            bllvm/scripts/collect-artifacts.sh windows-x86_64 base
           fi
       
       - name: Collect artifacts (experimental variant)
         run: |
           if [ "${{ inputs.platform }}" = "linux" ] || [ "${{ inputs.platform }}" = "both" ]; then
-            commons/scripts/collect-artifacts.sh linux-x86_64 experimental
+            bllvm/scripts/collect-artifacts.sh linux-x86_64 experimental
           fi
           if [ "${{ inputs.platform }}" = "windows" ] || [ "${{ inputs.platform }}" = "both" ]; then
-            commons/scripts/collect-artifacts.sh windows-x86_64 experimental
+            bllvm/scripts/collect-artifacts.sh windows-x86_64 experimental
           fi
       
       - name: Validate artifacts exist
@@ -544,11 +544,11 @@ jobs:
       
       - name: Create release package
         run: |
-          commons/scripts/create-release.sh ${{ inputs.version_tag }}
+          bllvm/scripts/create-release.sh ${{ inputs.version_tag }}
       
       - name: Verify versions
         run: |
-          commons/scripts/verify-versions.sh
+          bllvm/scripts/verify-versions.sh
       
       - name: Validate release artifacts before publishing
         run: |
@@ -625,14 +625,14 @@ jobs:
         with:
           tag_name: ${{ inputs.version_tag }}
           name: BTCDecoded ${{ inputs.version_tag }} (Prerelease)
-          body_path: commons/artifacts/RELEASE_NOTES.md
+          body_path: bllvm/artifacts/RELEASE_NOTES.md
           files: |
-            commons/artifacts/bllvm-*.tar.gz
-            commons/artifacts/bllvm-*.zip
-            commons/artifacts/bllvm-experimental-*.tar.gz
-            commons/artifacts/bllvm-experimental-*.zip
-            commons/artifacts/SHA256SUMS-*
-            commons/artifacts/SHA256SUMS-experimental-*
+            bllvm/artifacts/bllvm-*.tar.gz
+            bllvm/artifacts/bllvm-*.zip
+            bllvm/artifacts/bllvm-experimental-*.tar.gz
+            bllvm/artifacts/bllvm-experimental-*.zip
+            bllvm/artifacts/SHA256SUMS-*
+            bllvm/artifacts/SHA256SUMS-experimental-*
           draft: false
           prerelease: true
         env:
