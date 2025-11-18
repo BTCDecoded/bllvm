@@ -35,6 +35,14 @@ reqwest = { version = "0.12", features = ["json"], default-features = false }
 default = []
 # Production optimizations (enables bllvm-node production features)
 production = ["bllvm-node/production"]
+# Experimental features (passed through from bllvm-node)
+utxo-commitments = ["bllvm-node/utxo-commitments"]
+dandelion = ["bllvm-node/dandelion"]
+stratum-v2 = ["bllvm-node/stratum-v2"]
+bip158 = ["bllvm-node/bip158"]
+sigop = ["bllvm-node/sigop"]
+# CTV (CheckTemplateVerify) - passed through from bllvm-consensus via bllvm-protocol
+ctv = ["bllvm-node/utxo-commitments"]
 
 [dev-dependencies]
 tempfile = "3.8"

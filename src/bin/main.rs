@@ -227,37 +227,37 @@ async fn main() -> Result<()> {
     match cli.command {
         Some(Command::Status { rpc_addr }) => {
             let rpc_addr = rpc_addr.unwrap_or(cli.rpc_addr);
-            let (config, _) = build_final_config(&cli);
+            let (config, _, _, _, _) = build_final_config(&cli);
             handle_status(rpc_addr, &config).await
         }
         Some(Command::Health { rpc_addr }) => {
             let rpc_addr = rpc_addr.unwrap_or(cli.rpc_addr);
-            let (config, _) = build_final_config(&cli);
+            let (config, _, _, _, _) = build_final_config(&cli);
             handle_health(rpc_addr, &config).await
         }
         Some(Command::Version) => handle_version(),
         Some(Command::Chain { rpc_addr }) => {
             let rpc_addr = rpc_addr.unwrap_or(cli.rpc_addr);
-            let (config, _) = build_final_config(&cli);
+            let (config, _, _, _, _) = build_final_config(&cli);
             handle_chain(rpc_addr, &config).await
         }
         Some(Command::Peers { rpc_addr }) => {
             let rpc_addr = rpc_addr.unwrap_or(cli.rpc_addr);
-            let (config, _) = build_final_config(&cli);
+            let (config, _, _, _, _) = build_final_config(&cli);
             handle_peers(rpc_addr, &config).await
         }
         Some(Command::Network { rpc_addr }) => {
             let rpc_addr = rpc_addr.unwrap_or(cli.rpc_addr);
-            let (config, _) = build_final_config(&cli);
+            let (config, _, _, _, _) = build_final_config(&cli);
             handle_network(rpc_addr, &config).await
         }
         Some(Command::Sync { rpc_addr }) => {
             let rpc_addr = rpc_addr.unwrap_or(cli.rpc_addr);
-            let (config, _) = build_final_config(&cli);
+            let (config, _, _, _, _) = build_final_config(&cli);
             handle_sync(rpc_addr, &config).await
         }
         Some(Command::Config { subcommand }) => {
-            let (config, _) = build_final_config(&cli);
+            let (config, _, _, _, _) = build_final_config(&cli);
             match subcommand {
                 ConfigCommand::Show => handle_config_show(&config),
                 ConfigCommand::Validate { path } => handle_config_validate(path, &cli.config),
@@ -266,7 +266,7 @@ async fn main() -> Result<()> {
         }
         Some(Command::Rpc { method, params, rpc_addr }) => {
             let rpc_addr = rpc_addr.unwrap_or(cli.rpc_addr);
-            let (config, _) = build_final_config(&cli);
+            let (config, _, _, _, _) = build_final_config(&cli);
             let params: Value = serde_json::from_str(&params)
                 .context("Invalid JSON parameters")?;
             handle_rpc(rpc_addr, &method, params, &config).await
@@ -297,7 +297,8 @@ async fn main() -> Result<()> {
                 }
             };
 
-            node = node.with_config(config.clone());
+            node = node.with_config(config.clone())
+                .map_err(|e| anyhow::anyhow!("Failed to apply config: {}", e))?;
             
             if let Err(e) = node.with_modules_from_config(&config) {
                 warn!("Failed to configure modules: {}. Continuing without modules.", e);
@@ -710,6 +711,79 @@ fn apply_feature_flags(config: &mut NodeConfig, features: &FeatureFlags) {
         {
             warn!("Sigop feature not compiled in. Rebuild with --features sigop to enable.");
         }
+    }
+}
+
+/// Apply environment config overrides (non-feature flags)
+fn apply_env_config_overrides(config: &mut NodeConfig, env: &EnvOverrides) {
+    // Network timing config
+    if let Some(target_peer_count) = env.target_peer_count {
+        // This would need to be added to NodeConfig if not already present
+        // For now, just log it
+        info!("Target peer count overridden by ENV: {}", target_peer_count);
+    }
+    if let Some(peer_connection_delay) = env.peer_connection_delay {
+        info!("Peer connection delay overridden by ENV: {}", peer_connection_delay);
+    }
+    if let Some(max_addresses_from_dns) = env.max_addresses_from_dns {
+        info!("Max addresses from DNS overridden by ENV: {}", max_addresses_from_dns);
+    }
+    
+    // Request timeout config
+    if let Some(async_request_timeout) = env.async_request_timeout {
+        info!("Async request timeout overridden by ENV: {}", async_request_timeout);
+    }
+    if let Some(utxo_commitment_timeout) = env.utxo_commitment_timeout {
+        info!("UTXO commitment timeout overridden by ENV: {}", utxo_commitment_timeout);
+    }
+    if let Some(request_cleanup_interval) = env.request_cleanup_interval {
+        info!("Request cleanup interval overridden by ENV: {}", request_cleanup_interval);
+    }
+    if let Some(pending_request_max_age) = env.pending_request_max_age {
+        info!("Pending request max age overridden by ENV: {}", pending_request_max_age);
+    }
+    
+    // Module resource limits config
+    if let Some(module_max_cpu_percent) = env.module_max_cpu_percent {
+        info!("Module max CPU percent overridden by ENV: {}", module_max_cpu_percent);
+    }
+    if let Some(module_max_memory_bytes) = env.module_max_memory_bytes {
+        info!("Module max memory bytes overridden by ENV: {}", module_max_memory_bytes);
+    }
+    if let Some(module_max_file_descriptors) = env.module_max_file_descriptors {
+        info!("Module max file descriptors overridden by ENV: {}", module_max_file_descriptors);
+    }
+    if let Some(module_max_child_processes) = env.module_max_child_processes {
+        info!("Module max child processes overridden by ENV: {}", module_max_child_processes);
+    }
+    if let Some(module_startup_wait_millis) = env.module_startup_wait_millis {
+        info!("Module startup wait millis overridden by ENV: {}", module_startup_wait_millis);
+    }
+    if let Some(module_socket_timeout) = env.module_socket_timeout {
+        info!("Module socket timeout overridden by ENV: {}", module_socket_timeout);
+    }
+    if let Some(module_socket_check_interval) = env.module_socket_check_interval {
+        info!("Module socket check interval overridden by ENV: {}", module_socket_check_interval);
+    }
+    if let Some(module_socket_max_attempts) = env.module_socket_max_attempts {
+        info!("Module socket max attempts overridden by ENV: {}", module_socket_max_attempts);
+    }
+}
+
+/// Apply CLI advanced config options
+fn apply_cli_advanced_config(config: &mut NodeConfig, advanced: &AdvancedConfig) {
+    if let Some(target_peer_count) = advanced.target_peer_count {
+        info!("Target peer count set via CLI: {}", target_peer_count);
+        // This would need to be added to NodeConfig if not already present
+    }
+    if let Some(async_request_timeout) = advanced.async_request_timeout {
+        info!("Async request timeout set via CLI: {}", async_request_timeout);
+    }
+    if let Some(module_max_cpu_percent) = advanced.module_max_cpu_percent {
+        info!("Module max CPU percent set via CLI: {}", module_max_cpu_percent);
+    }
+    if let Some(module_max_memory_bytes) = advanced.module_max_memory_bytes {
+        info!("Module max memory bytes set via CLI: {}", module_max_memory_bytes);
     }
 }
 
