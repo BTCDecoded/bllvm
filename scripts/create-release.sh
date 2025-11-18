@@ -135,6 +135,40 @@ EOF
     log_success "Created release notes: ${notes_file}"
 }
 
+rename_archives() {
+    log_info "Renaming archives to include version tag: ${VERSION_TAG}"
+    
+    pushd "$ARTIFACTS_DIR" > /dev/null
+    
+    # Rename base variant archives
+    for platform in linux-x86_64 windows-x86_64; do
+        # Rename tar.gz files
+        if [ -f "bllvm-${platform}.tar.gz" ]; then
+            mv "bllvm-${platform}.tar.gz" "bllvm-${VERSION_TAG}-${platform}.tar.gz"
+            log_success "Renamed: bllvm-${platform}.tar.gz -> bllvm-${VERSION_TAG}-${platform}.tar.gz"
+        fi
+        
+        # Rename zip files
+        if [ -f "bllvm-${platform}.zip" ]; then
+            mv "bllvm-${platform}.zip" "bllvm-${VERSION_TAG}-${platform}.zip"
+            log_success "Renamed: bllvm-${platform}.zip -> bllvm-${VERSION_TAG}-${platform}.zip"
+        fi
+        
+        # Rename experimental variant archives
+        if [ -f "bllvm-experimental-${platform}.tar.gz" ]; then
+            mv "bllvm-experimental-${platform}.tar.gz" "bllvm-experimental-${VERSION_TAG}-${platform}.tar.gz"
+            log_success "Renamed: bllvm-experimental-${platform}.tar.gz -> bllvm-experimental-${VERSION_TAG}-${platform}.tar.gz"
+        fi
+        
+        if [ -f "bllvm-experimental-${platform}.zip" ]; then
+            mv "bllvm-experimental-${platform}.zip" "bllvm-experimental-${VERSION_TAG}-${platform}.zip"
+            log_success "Renamed: bllvm-experimental-${platform}.zip -> bllvm-experimental-${VERSION_TAG}-${platform}.zip"
+        fi
+    done
+    
+    popd > /dev/null
+}
+
 main() {
     log_info "Creating release for tag: ${VERSION_TAG}"
     
@@ -147,6 +181,7 @@ main() {
     fi
     
     create_release_notes
+    rename_archives
     
     log_success "Release created for ${VERSION_TAG}"
     log_info "Release artifacts: ${ARTIFACTS_DIR}"
