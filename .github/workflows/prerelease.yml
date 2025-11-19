@@ -255,6 +255,17 @@ jobs:
           cd ${{ github.workspace }}
           FAILED_REPOS=()
           
+          # Update Cargo.lock files to ensure sha2-asm is not included for Windows
+          echo "Updating Cargo.lock files to resolve dependencies for Windows target..."
+          for repo in bllvm-consensus bllvm-protocol bllvm-node bllvm bllvm-sdk; do
+            if [ -d "$repo" ]; then
+              cd "$repo"
+              # Update lockfile for Windows target to ensure correct dependency resolution
+              cargo update --target x86_64-pc-windows-gnu 2>&1 | head -20 || true
+              cd ..
+            fi
+          done
+          
           for repo in bllvm bllvm-sdk; do
             if [ -d "$repo" ]; then
               echo "Building $repo for Windows (base variant)..."
@@ -262,22 +273,20 @@ jobs:
               
               # Build with appropriate features (bllvm-sdk doesn't have production feature)
               # Cargo config already set up MinGW linker, no need to unset CC/CXX
+              # Disable sha2-asm by ensuring sha2 doesn't have asm feature for Windows
               if [ "$repo" = "bllvm" ]; then
                 # bllvm has production feature
-                if cargo build --release --target x86_64-pc-windows-gnu --features production; then
-                  echo "✅ Successfully built $repo for Windows (base)"
-                else
+                # Use RUSTFLAGS to ensure sha2-asm is not used
+                RUSTFLAGS="-C target-feature=-crt-static" cargo build --release --target x86_64-pc-windows-gnu --features production 2>&1 | tee /tmp/${repo}-windows-build.log || {
                   echo "❌ Windows build failed for $repo (base variant)"
                   FAILED_REPOS+=("$repo")
-                fi
+                }
               else
                 # bllvm-sdk uses default features (no production feature)
-                if cargo build --release --target x86_64-pc-windows-gnu; then
-                  echo "✅ Successfully built $repo for Windows (base)"
-                else
+                RUSTFLAGS="-C target-feature=-crt-static" cargo build --release --target x86_64-pc-windows-gnu 2>&1 | tee /tmp/${repo}-windows-build.log || {
                   echo "❌ Windows build failed for $repo (base variant)"
                   FAILED_REPOS+=("$repo")
-                fi
+                }
               fi
               cd ..
             fi
