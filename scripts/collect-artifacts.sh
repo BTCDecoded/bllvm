@@ -71,6 +71,14 @@ collect_bllvm_binary() {
     if [ -f "$bin_path" ]; then
         cp "$bin_path" "${BLLVM_DIR}/"
         log_success "Collected: ${binary}${BIN_EXT}"
+        
+        # Also include governance tools in the bllvm archive
+        # This ensures the archive contains everything needed
+        if [ "$VARIANT" = "base" ] && [ -d "$GOVERNANCE_DIR" ] && [ "$(ls -A "$GOVERNANCE_DIR" 2>/dev/null)" ]; then
+            log_info "Including governance tools in bllvm archive..."
+            cp -r "$GOVERNANCE_DIR"/* "${BLLVM_DIR}/" 2>/dev/null || true
+        fi
+        
         return 0
     else
         log_warn "Binary not found: ${bin_path}"
@@ -213,26 +221,8 @@ main() {
         create_archive "$BLLVM_DIR" "$bllvm_archive" "$bllvm_checksum"
     fi
     
-    # Collect governance binaries (only collect once, no variants - they're the same regardless)
-    # Only collect in base variant to avoid duplication
-    if [ "$VARIANT" = "base" ]; then
-        collect_governance_binaries
-        
-        if [ -d "$GOVERNANCE_DIR" ] && [ "$(ls -A "$GOVERNANCE_DIR" 2>/dev/null)" ]; then
-            # Generate checksum for governance binaries (single variant)
-            local gov_checksum="${ARTIFACTS_DIR}/SHA256SUMS-governance-${PLATFORM}"
-            generate_checksums "$GOVERNANCE_DIR" "$gov_checksum"
-            
-            # Create archive for governance binaries (single variant)
-            local gov_archive
-            if [[ "$PLATFORM" == *"windows"* ]]; then
-                gov_archive="bllvm-governance-${PLATFORM}.zip"
-            else
-                gov_archive="bllvm-governance-${PLATFORM}.tar.gz"
-            fi
-            create_archive "$GOVERNANCE_DIR" "$gov_archive" "$gov_checksum"
-        fi
-    fi
+    # Governance tools are now included in the bllvm archives (collected in collect_bllvm_binary)
+    # No separate governance archive needed
     
     log_success "Artifacts collected in: ${ARTIFACTS_DIR}"
 }
