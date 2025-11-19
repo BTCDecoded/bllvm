@@ -255,15 +255,14 @@ jobs:
           cd ${{ github.workspace }}
           FAILED_REPOS=()
           
-          # Clean and regenerate Cargo.lock for Windows target to ensure correct dependency resolution
-          echo "Cleaning and regenerating Cargo.lock for Windows target..."
+          # Update Cargo.lock for Windows target to ensure target-specific dependencies are applied
+          echo "Updating Cargo.lock for Windows target to apply target-specific dependencies..."
           for repo in bllvm-consensus bllvm-protocol bllvm-node bllvm bllvm-sdk; do
             if [ -d "$repo" ]; then
               cd "$repo"
-              # Remove target-specific lock files and regenerate
-              rm -f Cargo.lock
-              # Generate new lockfile (this will use target-specific dependencies)
-              cargo generate-lockfile --target x86_64-pc-windows-gnu 2>&1 | head -10 || cargo generate-lockfile 2>&1 | head -10 || true
+              # Update lockfile for Windows target (this will apply target-specific dependencies)
+              # The target-specific sha2 dependency config in bllvm-consensus should disable asm for Windows
+              cargo update --target x86_64-pc-windows-gnu 2>&1 | grep -E "(sha2|Updating|Locked)" | head -10 || true
               cd ..
             fi
           done
