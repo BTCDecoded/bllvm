@@ -763,6 +763,30 @@ jobs:
           echo "✅ Individual binaries prepared in ${BINARIES_DIR}"
           ls -lh "$BINARIES_DIR" || true
       
+      - name: Verify files exist before release
+        run: |
+          BLLVM_DIR="${GITHUB_WORKSPACE}/bllvm"
+          ARTIFACTS_DIR="${BLLVM_DIR}/artifacts"
+          VERSION_TAG="${{ inputs.version_tag }}"
+          
+          echo "=== Verifying files exist before release ==="
+          
+          # List all files that will be uploaded
+          echo "Archive files:"
+          find "${ARTIFACTS_DIR}" -maxdepth 1 -type f \( -name "bllvm-${VERSION_TAG}-*.tar.gz" -o -name "bllvm-${VERSION_TAG}-*.zip" -o -name "bllvm-experimental-${VERSION_TAG}-*.tar.gz" -o -name "bllvm-experimental-${VERSION_TAG}-*.zip" -o -name "bllvm-governance-${VERSION_TAG}-*.tar.gz" -o -name "bllvm-governance-${VERSION_TAG}-*.zip" \) -ls
+          
+          echo ""
+          echo "Checksum files:"
+          find "${ARTIFACTS_DIR}" -maxdepth 1 -type f -name "SHA256SUMS-*" -ls
+          
+          echo ""
+          echo "Individual binaries:"
+          if [ -d "${ARTIFACTS_DIR}/binaries-individual" ]; then
+            find "${ARTIFACTS_DIR}/binaries-individual" -type f -ls
+          else
+            echo "⚠️  binaries-individual directory not found"
+          fi
+      
       - name: Create GitHub Prerelease
         uses: softprops/action-gh-release@v1
         with:
@@ -770,12 +794,12 @@ jobs:
           name: BTCDecoded ${{ inputs.version_tag }} (Prerelease)
           body_path: bllvm/artifacts/RELEASE_NOTES.md
           files: |
-            bllvm/artifacts/bllvm-*.tar.gz
-            bllvm/artifacts/bllvm-*.zip
-            bllvm/artifacts/bllvm-experimental-*.tar.gz
-            bllvm/artifacts/bllvm-experimental-*.zip
-            bllvm/artifacts/bllvm-governance-*.tar.gz
-            bllvm/artifacts/bllvm-governance-*.zip
+            bllvm/artifacts/bllvm-${{ inputs.version_tag }}-*.tar.gz
+            bllvm/artifacts/bllvm-${{ inputs.version_tag }}-*.zip
+            bllvm/artifacts/bllvm-experimental-${{ inputs.version_tag }}-*.tar.gz
+            bllvm/artifacts/bllvm-experimental-${{ inputs.version_tag }}-*.zip
+            bllvm/artifacts/bllvm-governance-${{ inputs.version_tag }}-*.tar.gz
+            bllvm/artifacts/bllvm-governance-${{ inputs.version_tag }}-*.zip
             bllvm/artifacts/SHA256SUMS-*
             bllvm/artifacts/binaries-individual/*
           draft: false
