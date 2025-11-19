@@ -109,11 +109,13 @@ collect_governance_binaries() {
         fi
     done
     
-    # Collect bllvm-commons binaries (Linux only)
+    # Collect bllvm-commons binaries (Linux only, Windows cross-compile doesn't build it yet)
     if [[ "$PLATFORM" != *"windows"* ]]; then
         local repo="bllvm-commons"
         local repo_path="${PARENT_DIR}/${repo}"
         local binaries="${REPO_BINARIES[$repo]}"
+        
+        log_info "Collecting bllvm-commons binaries from: ${repo_path}/${TARGET_DIR}"
         
         for binary in $binaries; do
             local bin_path="${repo_path}/${TARGET_DIR}/${binary}${BIN_EXT}"
@@ -122,8 +124,15 @@ collect_governance_binaries() {
                 log_success "Collected: ${binary}${BIN_EXT}"
             else
                 log_warn "Binary not found: ${bin_path}"
+                # List what's actually in the directory for debugging
+                if [ -d "${repo_path}/${TARGET_DIR}" ]; then
+                    log_info "Contents of ${repo_path}/${TARGET_DIR}:"
+                    ls -lh "${repo_path}/${TARGET_DIR}" | head -20 || true
+                fi
             fi
         done
+    else
+        log_info "Skipping bllvm-commons for Windows (not yet cross-compiled)"
     fi
 }
 
@@ -208,22 +217,18 @@ main() {
         fi
         generate_checksums "$BLLVM_DIR" "$bllvm_checksum"
         
-        # Create archive for bllvm binary
-        local bllvm_archive
+        # Create archives for bllvm binary (both tar.gz and zip for all platforms)
+        local bllvm_archive_tgz
+        local bllvm_archive_zip
         if [ "$VARIANT" = "base" ]; then
-            if [[ "$PLATFORM" == *"windows"* ]]; then
-                bllvm_archive="bllvm-${PLATFORM}.zip"
-            else
-                bllvm_archive="bllvm-${PLATFORM}.tar.gz"
-            fi
+            bllvm_archive_tgz="bllvm-${PLATFORM}.tar.gz"
+            bllvm_archive_zip="bllvm-${PLATFORM}.zip"
         else
-            if [[ "$PLATFORM" == *"windows"* ]]; then
-                bllvm_archive="bllvm-experimental-${PLATFORM}.zip"
-            else
-                bllvm_archive="bllvm-experimental-${PLATFORM}.tar.gz"
-            fi
+            bllvm_archive_tgz="bllvm-experimental-${PLATFORM}.tar.gz"
+            bllvm_archive_zip="bllvm-experimental-${PLATFORM}.zip"
         fi
-        create_archive "$BLLVM_DIR" "$bllvm_archive" "$bllvm_checksum"
+        create_archive "$BLLVM_DIR" "$bllvm_archive_tgz" "$bllvm_checksum"
+        create_archive "$BLLVM_DIR" "$bllvm_archive_zip" "$bllvm_checksum"
     fi
     
     # Governance tools are now included in the bllvm archives (collected in collect_bllvm_binary)
