@@ -170,11 +170,17 @@ jobs:
             echo "⚠️  Package manager not recognized, MinGW may need manual installation"
           fi
           
-          # Verify MinGW installation
-          if command -v x86_64-w64-mingw32-gcc &> /dev/null; then
-            echo "✅ MinGW-w64 GCC found: $(x86_64-w64-mingw32-gcc --version | head -n1)"
+          # Verify MinGW installation (check both command -v and direct path)
+          if command -v x86_64-w64-mingw32-gcc &> /dev/null || [ -f /usr/bin/x86_64-w64-mingw32-gcc ]; then
+            MINGW_GCC=$(command -v x86_64-w64-mingw32-gcc 2>/dev/null || echo "/usr/bin/x86_64-w64-mingw32-gcc")
+            if [ -x "$MINGW_GCC" ]; then
+              echo "✅ MinGW-w64 GCC found: $($MINGW_GCC --version | head -n1)"
+              echo "   Location: $MINGW_GCC"
+            else
+              echo "⚠️  MinGW-w64 GCC found but not executable: $MINGW_GCC"
+            fi
           else
-            echo "⚠️  MinGW-w64 GCC not found in PATH, builds may fail"
+            echo "⚠️  MinGW-w64 GCC not found in PATH or /usr/bin, builds may fail"
             echo "   Expected: x86_64-w64-mingw32-gcc"
           fi
           
