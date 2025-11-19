@@ -64,6 +64,10 @@ jobs:
             echo "CXX=ccache g++" >> $GITHUB_ENV
           else
             echo "⚠️  ccache not found (install for faster C dependency builds)"
+            # Explicitly unset CC/CXX to prevent build failures when ccache is not available
+            # This ensures cargo uses the default system compiler
+            echo "CC=" >> $GITHUB_ENV
+            echo "CXX=" >> $GITHUB_ENV
           fi
       
       - name: Fix corrupted cargo dependencies and config
