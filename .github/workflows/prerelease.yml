@@ -640,12 +640,7 @@ jobs:
               echo "❌ ERROR: bllvm Linux experimental binary not found"
             fi
             
-            # Check governance tools (single variant, same for both base and experimental)
-            if [ -f "${ARTIFACTS_DIR}/bllvm-governance-${VERSION_TAG}-linux-x86_64.tar.gz" ]; then
-              echo "✅ Found governance tools Linux archive"
-            else
-              echo "⚠️  WARNING: Governance tools Linux archive not found"
-            fi
+            # Governance tools are now included in bllvm archives, no separate archive needed
           fi
           
           if [ "${{ inputs.platform }}" = "windows" ] || [ "${{ inputs.platform }}" = "both" ]; then
@@ -664,17 +659,12 @@ jobs:
               echo "❌ ERROR: bllvm Windows experimental binary not found"
             fi
             
-            # Check governance tools (single variant, same for both base and experimental)
-            if [ -f "${ARTIFACTS_DIR}/bllvm-governance-${VERSION_TAG}-windows-x86_64.zip" ]; then
-              echo "✅ Found governance tools Windows archive"
-            else
-              echo "⚠️  WARNING: Governance tools Windows archive not found"
-            fi
+            # Governance tools are now included in bllvm archives, no separate archive needed
           fi
           
           # Check for SHA256SUMS files (at least one should exist)
           SHA256SUMS_FOUND=0
-          for checksum in SHA256SUMS-bllvm-* SHA256SUMS-bllvm-experimental-* SHA256SUMS-governance-*; do
+          for checksum in SHA256SUMS-bllvm-* SHA256SUMS-bllvm-experimental-*; do
             if [ -f "${ARTIFACTS_DIR}/${checksum}" ]; then
               SHA256SUMS_FOUND=1
               break
