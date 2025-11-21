@@ -69,7 +69,17 @@ jobs:
       - name: Determine build scope from event type
         id: scope
         run: |
-          EVENT_TYPE="${{ github.event.action || github.event_name }}"
+          # For repository_dispatch, event type is in github.event.action
+          # For other events, use github.event_name
+          if [ "${{ github.event_name }}" = "repository_dispatch" ]; then
+            EVENT_TYPE="${{ github.event.action }}"
+          else
+            EVENT_TYPE="${{ github.event_name }}"
+          fi
+          
+          echo "Event type: ${EVENT_TYPE}"
+          echo "Event name: ${{ github.event_name }}"
+          echo "Event action: ${{ github.event.action }}"
           
           # Default: build everything
           BUILD_CONSENSUS="true"
