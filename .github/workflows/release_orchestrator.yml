@@ -39,6 +39,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       
+      - name: Debug event information
+        run: |
+          echo "=== Event Debug Information ==="
+          echo "Event name: ${{ github.event_name }}"
+          echo "Event action: ${{ github.event.action }}"
+          echo "Event ref: ${{ github.ref }}"
+          echo "Event SHA: ${{ github.sha }}"
+          if [ "${{ github.event_name }}" = "repository_dispatch" ]; then
+            echo "Client payload:"
+            echo "${{ toJSON(github.event.client_payload) }}"
+          fi
+          echo "=============================="
+      
       - name: Determine trigger information
         id: refs
         run: |
