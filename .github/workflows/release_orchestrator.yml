@@ -23,7 +23,122 @@ permissions:
   packages: write
 
 jobs:
+  determine-scope:
+    name: Determine Build Scope
+    runs-on: [self-hosted, Linux, X64]
+    outputs:
+      build_consensus: ${{ steps.scope.outputs.build_consensus }}
+      build_protocol: ${{ steps.scope.outputs.build_protocol }}
+      build_node: ${{ steps.scope.outputs.build_node }}
+      build_sdk: ${{ steps.scope.outputs.build_sdk }}
+      build_governance: ${{ steps.scope.outputs.build_governance }}
+      trigger_ref: ${{ steps.refs.outputs.trigger_ref }}
+      trigger_sha: ${{ steps.refs.outputs.trigger_sha }}
+      trigger_repo: ${{ steps.refs.outputs.trigger_repo }}
+      use_latest_crates: ${{ steps.scope.outputs.use_latest_crates }}
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Determine trigger information
+        id: refs
+        run: |
+          if [ "${{ github.event_name }}" = "repository_dispatch" ]; then
+            # Use triggering repo's ref/commit from client_payload
+            TRIGGER_REF="${{ github.event.client_payload.source_ref || github.ref }}"
+            TRIGGER_SHA="${{ github.event.client_payload.source_sha || github.sha }}"
+            TRIGGER_REPO="${{ github.event.client_payload.triggered_by || 'unknown' }}"
+            echo "trigger_ref=${TRIGGER_REF}" >> $GITHUB_OUTPUT
+            echo "trigger_sha=${TRIGGER_SHA}" >> $GITHUB_OUTPUT
+            echo "trigger_repo=${TRIGGER_REPO}" >> $GITHUB_OUTPUT
+          elif [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            # Manual trigger - use provided ref or versions.toml
+            if [ -n "${{ inputs.set_ref }}" ]; then
+              echo "trigger_ref=${{ inputs.set_ref }}" >> $GITHUB_OUTPUT
+            else
+              echo "trigger_ref=main" >> $GITHUB_OUTPUT
+            fi
+            echo "trigger_sha=" >> $GITHUB_OUTPUT
+            echo "trigger_repo=manual" >> $GITHUB_OUTPUT
+          else
+            # workflow_run or other - use main
+            echo "trigger_ref=main" >> $GITHUB_OUTPUT
+            echo "trigger_sha=" >> $GITHUB_OUTPUT
+            echo "trigger_repo=workflow_run" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: Determine build scope from event type
+        id: scope
+        run: |
+          EVENT_TYPE="${{ github.event.action || github.event_name }}"
+          
+          # Default: build everything
+          BUILD_CONSENSUS="true"
+          BUILD_PROTOCOL="true"
+          BUILD_NODE="true"
+          BUILD_SDK="true"
+          BUILD_GOVERNANCE="true"
+          USE_LATEST_CRATES="false"
+          
+          # Determine scope based on event type
+          if [ "$EVENT_TYPE" = "build_consensus" ] || [ "$EVENT_TYPE" = "build_all" ]; then
+            # Build full chain from consensus
+            BUILD_CONSENSUS="true"
+            BUILD_PROTOCOL="true"
+            BUILD_NODE="true"
+            BUILD_SDK="true"
+            BUILD_GOVERNANCE="true"
+          elif [ "$EVENT_TYPE" = "build_protocol" ]; then
+            # Skip consensus, build from protocol
+            BUILD_CONSENSUS="false"
+            BUILD_PROTOCOL="true"
+            BUILD_NODE="true"
+            BUILD_SDK="true"
+            BUILD_GOVERNANCE="true"
+          elif [ "$EVENT_TYPE" = "build_node" ]; then
+            # Skip consensus/protocol, build from node
+            BUILD_CONSENSUS="false"
+            BUILD_PROTOCOL="false"
+            BUILD_NODE="true"
+            BUILD_SDK="true"
+            BUILD_GOVERNANCE="true"
+          elif [ "$EVENT_TYPE" = "build_sdk" ]; then
+            # Only build SDK and governance (parallel chain)
+            BUILD_CONSENSUS="false"
+            BUILD_PROTOCOL="false"
+            BUILD_NODE="false"
+            BUILD_SDK="true"
+            BUILD_GOVERNANCE="true"
+          elif [ "$EVENT_TYPE" = "build_governance" ]; then
+            # Only build governance
+            BUILD_CONSENSUS="false"
+            BUILD_PROTOCOL="false"
+            BUILD_NODE="false"
+            BUILD_SDK="false"
+            BUILD_GOVERNANCE="true"
+          fi
+          
+          # For nightly/prerelease, use latest crates.io versions
+          if [ "${{ github.ref }}" != "refs/heads/main" ] && [ "${{ github.ref }}" != "refs/heads/master" ]; then
+            USE_LATEST_CRATES="true"
+          fi
+          
+          echo "build_consensus=${BUILD_CONSENSUS}" >> $GITHUB_OUTPUT
+          echo "build_protocol=${BUILD_PROTOCOL}" >> $GITHUB_OUTPUT
+          echo "build_node=${BUILD_NODE}" >> $GITHUB_OUTPUT
+          echo "build_sdk=${BUILD_SDK}" >> $GITHUB_OUTPUT
+          echo "build_governance=${BUILD_GOVERNANCE}" >> $GITHUB_OUTPUT
+          echo "use_latest_crates=${USE_LATEST_CRATES}" >> $GITHUB_OUTPUT
+          
+          echo "Build scope determined:"
+          echo "  Consensus: ${BUILD_CONSENSUS}"
+          echo "  Protocol: ${BUILD_PROTOCOL}"
+          echo "  Node: ${BUILD_NODE}"
+          echo "  SDK: ${BUILD_SDK}"
+          echo "  Governance: ${BUILD_GOVERNANCE}"
+          echo "  Use latest crates: ${USE_LATEST_CRATES}"
+
   read-versions:
+    needs: determine-scope
     runs-on: [self-hosted, Linux, X64]
     outputs:
       cp: ${{ steps.parse.outputs.cp }}
@@ -33,24 +148,80 @@ jobs:
       ga: ${{ steps.parse.outputs.ga }}
     steps:
       - uses: actions/checkout@v4
-      - name: Parse versions.toml
+      - name: Parse versions.toml or use latest crates
         id: parse
         run: |
-          # Parse versions.toml using new repo names
-          # Format: bllvm-consensus = { version = "0.1.0", git_tag = "v0.1.0", ... }
-          CP=$(grep -A 1 "bllvm-consensus" versions.toml | grep "git_tag" | sed -E 's/.*git_tag = "([^"]+)".*/\1/' | head -1)
-          PE=$(grep -A 1 "bllvm-protocol" versions.toml | grep "git_tag" | sed -E 's/.*git_tag = "([^"]+)".*/\1/' | head -1)
-          RN=$(grep -A 1 "bllvm-node" versions.toml | grep "git_tag" | sed -E 's/.*git_tag = "([^"]+)".*/\1/' | head -1)
-          DS=$(grep -A 1 "bllvm-sdk" versions.toml | grep "git_tag" | sed -E 's/.*git_tag = "([^"]+)".*/\1/' | head -1)
-          GA=$(grep -A 1 "governance-app" versions.toml | grep "git_tag" | sed -E 's/.*git_tag = "([^"]+)".*/\1/' | head -1)
-          echo "cp=$CP" >> $GITHUB_OUTPUT
-          echo "pe=$PE" >> $GITHUB_OUTPUT
-          echo "rn=$RN" >> $GITHUB_OUTPUT
-          echo "ds=$DS" >> $GITHUB_OUTPUT
-          echo "ga=$GA" >> $GITHUB_OUTPUT
+          USE_LATEST="${{ needs.determine-scope.outputs.use_latest_crates }}"
+          TRIGGER_REF="${{ needs.determine-scope.outputs.trigger_ref }}"
+          
+          if [ "$USE_LATEST" = "true" ]; then
+            # For nightly/prerelease: use latest from crates.io
+            echo "Using latest crates.io versions for nightly release"
+            CP="main"  # Will use latest published
+            PE="main"
+            RN="main"
+            DS="main"
+            GA="main"
+          elif [ "${{ github.event_name }}" = "repository_dispatch" ]; then
+            # Use triggering repo's ref for the triggering repo, main for others
+            TRIGGER_REPO="${{ needs.determine-scope.outputs.trigger_repo }}"
+            if [ "$TRIGGER_REPO" = "bllvm-consensus" ]; then
+              CP="${TRIGGER_REF}"
+              PE="main"
+              RN="main"
+              DS="main"
+              GA="main"
+            elif [ "$TRIGGER_REPO" = "bllvm-protocol" ]; then
+              CP="main"  # Use existing consensus
+              PE="${TRIGGER_REF}"
+              RN="main"
+              DS="main"
+              GA="main"
+            elif [ "$TRIGGER_REPO" = "bllvm-node" ]; then
+              CP="main"
+              PE="main"
+              RN="${TRIGGER_REF}"
+              DS="main"
+              GA="main"
+            elif [ "$TRIGGER_REPO" = "bllvm-sdk" ]; then
+              CP="main"
+              PE="main"
+              RN="main"
+              DS="${TRIGGER_REF}"
+              GA="main"
+            else
+              # Fallback to versions.toml
+              CP=$(grep -A 1 "bllvm-consensus" versions.toml | grep "git_tag" | sed -E 's/.*git_tag = "([^"]+)".*/\1/' | head -1 || echo "main")
+              PE=$(grep -A 1 "bllvm-protocol" versions.toml | grep "git_tag" | sed -E 's/.*git_tag = "([^"]+)".*/\1/' | head -1 || echo "main")
+              RN=$(grep -A 1 "bllvm-node" versions.toml | grep "git_tag" | sed -E 's/.*git_tag = "([^"]+)".*/\1/' | head -1 || echo "main")
+              DS=$(grep -A 1 "bllvm-sdk" versions.toml | grep "git_tag" | sed -E 's/.*git_tag = "([^"]+)".*/\1/' | head -1 || echo "main")
+              GA=$(grep -A 1 "governance-app" versions.toml | grep "git_tag" | sed -E 's/.*git_tag = "([^"]+)".*/\1/' | head -1 || echo "main")
+            fi
+          else
+            # Parse versions.toml for official releases
+            CP=$(grep -A 1 "bllvm-consensus" versions.toml | grep "git_tag" | sed -E 's/.*git_tag = "([^"]+)".*/\1/' | head -1 || echo "main")
+            PE=$(grep -A 1 "bllvm-protocol" versions.toml | grep "git_tag" | sed -E 's/.*git_tag = "([^"]+)".*/\1/' | head -1 || echo "main")
+            RN=$(grep -A 1 "bllvm-node" versions.toml | grep "git_tag" | sed -E 's/.*git_tag = "([^"]+)".*/\1/' | head -1 || echo "main")
+            DS=$(grep -A 1 "bllvm-sdk" versions.toml | grep "git_tag" | sed -E 's/.*git_tag = "([^"]+)".*/\1/' | head -1 || echo "main")
+            GA=$(grep -A 1 "governance-app" versions.toml | grep "git_tag" | sed -E 's/.*git_tag = "([^"]+)".*/\1/' | head -1 || echo "main")
+          fi
+          
+          echo "cp=${CP}" >> $GITHUB_OUTPUT
+          echo "pe=${PE}" >> $GITHUB_OUTPUT
+          echo "rn=${RN}" >> $GITHUB_OUTPUT
+          echo "ds=${DS}" >> $GITHUB_OUTPUT
+          echo "ga=${GA}" >> $GITHUB_OUTPUT
+          
+          echo "Using refs:"
+          echo "  Consensus: ${CP}"
+          echo "  Protocol: ${PE}"
+          echo "  Node: ${RN}"
+          echo "  SDK: ${DS}"
+          echo "  Governance: ${GA}"
 
   verify-consensus:
-    needs: read-versions
+    needs: [determine-scope, read-versions]
+    if: needs.determine-scope.outputs.build_consensus == 'true'
     uses: ./.github/workflows/verify_consensus_cached.yml
     with:
       repo: bllvm-consensus
@@ -60,7 +231,10 @@ jobs:
       timeout_minutes: 120
 
   build-protocol:
-    needs: verify-consensus
+    needs: [determine-scope, read-versions, verify-consensus]
+    if: |
+      needs.determine-scope.outputs.build_protocol == 'true' &&
+      (needs.determine-scope.outputs.build_consensus == 'false' || needs.verify-consensus.result == 'success')
     uses: ./.github/workflows/build_lib_cached.yml
     with:
       repo: bllvm-protocol
@@ -73,7 +247,10 @@ jobs:
       timeout_minutes: 60
 
   build-node:
-    needs: build-protocol
+    needs: [determine-scope, read-versions, build-protocol]
+    if: |
+      needs.determine-scope.outputs.build_node == 'true' &&
+      (needs.determine-scope.outputs.build_protocol == 'false' || needs.build-protocol.result == 'success')
     uses: ./.github/workflows/build_lib_cached.yml
     with:
       repo: bllvm-node
@@ -86,7 +263,10 @@ jobs:
       timeout_minutes: 90
 
   build-sdk:
-    needs: build-node
+    needs: [determine-scope, read-versions, build-node]
+    if: |
+      needs.determine-scope.outputs.build_sdk == 'true' &&
+      (needs.determine-scope.outputs.build_node == 'false' || needs.build-node.result == 'success')
     uses: ./.github/workflows/build_lib_cached.yml
     with:
       repo: bllvm-sdk
@@ -99,7 +279,10 @@ jobs:
       timeout_minutes: 60
 
   build-governance-app-image:
-    needs: build-sdk
+    needs: [determine-scope, read-versions, build-sdk]
+    if: |
+      needs.determine-scope.outputs.build_governance == 'true' &&
+      (needs.determine-scope.outputs.build_sdk == 'false' || needs.build-sdk.result == 'success')
     uses: ./.github/workflows/build_docker.yml
     with:
       repo: bllvm-commons
@@ -112,25 +295,32 @@ jobs:
       timeout_minutes: 30
 
   trigger-release:
-    needs: build-governance-app-image
-    if: success()
+    needs: [determine-scope, build-governance-app-image]
+    if: |
+      success() &&
+      (needs.determine-scope.outputs.build_governance == 'false' || needs.build-governance-app-image.result == 'success')
     runs-on: [self-hosted, Linux, X64]
     steps:
       - name: Determine release type
         id: release-type
         run: |
           # Check if this is main branch (official release) or other (prerelease)
-          BRANCH="${GITHUB_REF#refs/heads/}"
-          if [ "$BRANCH" = "main" ] || [ "$BRANCH" = "master" ]; then
+          TRIGGER_REF="${{ needs.determine-scope.outputs.trigger_ref }}"
+          if [ "$TRIGGER_REF" = "refs/heads/main" ] || [ "$TRIGGER_REF" = "refs/heads/master" ] || [ "$TRIGGER_REF" = "main" ] || [ "$TRIGGER_REF" = "master" ]; then
             echo "type=official" >> $GITHUB_OUTPUT
             echo "Triggering official release for main branch"
           else
             echo "type=prerelease" >> $GITHUB_OUTPUT
             DATE=$(date +%Y%m%d)
-            COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+            COMMIT="${{ needs.determine-scope.outputs.trigger_sha }}"
+            if [ -z "$COMMIT" ]; then
+              COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+            else
+              COMMIT=$(echo "$COMMIT" | cut -c1-7)
+            fi
             VERSION="nightly-${DATE}-${COMMIT}"
             echo "version=${VERSION}" >> $GITHUB_OUTPUT
-            echo "Triggering prerelease for branch: $BRANCH"
+            echo "Triggering prerelease for branch: $TRIGGER_REF"
           fi
       
       - name: Trigger official release
@@ -138,6 +328,7 @@ jobs:
         uses: ./.github/workflows/release.yml
         with:
           platform: both
+          use_latest_crates: false
       
       - name: Trigger prerelease
         if: steps.release-type.outputs.type == 'prerelease'
@@ -145,9 +336,11 @@ jobs:
         with:
           version_tag: ${{ steps.release-type.outputs.version }}
           platform: both
+          use_latest_crates: ${{ needs.determine-scope.outputs.use_latest_crates }}
 
   deploy-signal:
     needs: [build-governance-app-image, trigger-release]
+    if: always()
     runs-on: [self-hosted, Linux, X64]
     steps:
       - name: Send deployment signal to governance-app self-hosted runner

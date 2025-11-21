@@ -24,6 +24,11 @@ on:
         required: false
         default: false
         type: boolean
+      use_latest_crates:
+        description: 'Use latest crates.io versions instead of publishing new ones (for nightly builds)'
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: write
@@ -184,6 +189,7 @@ jobs:
           PARENT_DIR: ${{ github.workspace }}
       
       - name: Publish dependencies to crates.io
+        if: ${{ !inputs.use_latest_crates }}
         run: |
           VERSION_NUMBER="${{ needs.determine-version.outputs.version_number }}"
           PARENT_DIR="${GITHUB_WORKSPACE}"
@@ -310,13 +316,47 @@ jobs:
             echo "✅ Added Windows target configuration"
           fi
       
+      - name: Get latest crates.io versions
+        if: ${{ inputs.use_latest_crates }}
+        id: latest-versions
+        run: |
+          echo "=== Getting latest versions from crates.io ==="
+          
+          # Get latest versions from crates.io
+          CONSENSUS_VER=$(cargo search bllvm-consensus --limit 1 2>/dev/null | head -1 | sed -E 's/^bllvm-consensus = "([^"]+)".*/\1/' || echo "0.1.0")
+          PROTOCOL_VER=$(cargo search bllvm-protocol --limit 1 2>/dev/null | head -1 | sed -E 's/^bllvm-protocol = "([^"]+)".*/\1/' || echo "0.1.0")
+          NODE_VER=$(cargo search bllvm-node --limit 1 2>/dev/null | head -1 | sed -E 's/^bllvm-node = "([^"]+)".*/\1/' || echo "0.1.0")
+          SDK_VER=$(cargo search bllvm-sdk --limit 1 2>/dev/null | head -1 | sed -E 's/^bllvm-sdk = "([^"]+)".*/\1/' || echo "0.1.0")
+          
+          echo "consensus=${CONSENSUS_VER}" >> $GITHUB_OUTPUT
+          echo "protocol=${PROTOCOL_VER}" >> $GITHUB_OUTPUT
+          echo "node=${NODE_VER}" >> $GITHUB_OUTPUT
+          echo "sdk=${SDK_VER}" >> $GITHUB_OUTPUT
+          
+          echo "Latest crates.io versions:"
+          echo "  Consensus: ${CONSENSUS_VER}"
+          echo "  Protocol: ${PROTOCOL_VER}"
+          echo "  Node: ${NODE_VER}"
+          echo "  SDK: ${SDK_VER}"
+      
       - name: Update Cargo.toml to use published crates
         run: |
-          VERSION_NUMBER="${{ needs.determine-version.outputs.version_number }}"
-          PARENT_DIR="${GITHUB_WORKSPACE}"
+          if [ "${{ inputs.use_latest_crates }}" = "true" ]; then
+            VERSION_NUMBER="${{ steps.latest-versions.outputs.consensus }}"
+            PROTOCOL_VER="${{ steps.latest-versions.outputs.protocol }}"
+            NODE_VER="${{ steps.latest-versions.outputs.node }}"
+            SDK_VER="${{ steps.latest-versions.outputs.sdk }}"
+            echo "=== Updating Cargo.toml to use latest crates.io versions ==="
+          else
+            VERSION_NUMBER="${{ needs.determine-version.outputs.version_number }}"
+            PROTOCOL_VER="${VERSION_NUMBER}"
+            NODE_VER="${VERSION_NUMBER}"
+            SDK_VER="${VERSION_NUMBER}"
+            echo "=== Updating Cargo.toml to use published crates ==="
+            echo "Version: ${VERSION_NUMBER}"
+          fi
           
-          echo "=== Updating Cargo.toml to use published crates ==="
-          echo "Version: ${VERSION_NUMBER}"
+          PARENT_DIR="${GITHUB_WORKSPACE}"
           
           # Update bllvm-protocol to use published bllvm-consensus
           if [ -f "${PARENT_DIR}/bllvm-protocol/Cargo.toml" ]; then
@@ -327,19 +367,19 @@ jobs:
           # Update bllvm-node to use published bllvm-protocol
           if [ -f "${PARENT_DIR}/bllvm-node/Cargo.toml" ]; then
             echo "Updating bllvm-node/Cargo.toml..."
-            sed -i 's|bllvm-protocol = { path = "\.\./bllvm-protocol"|bllvm-protocol = "='"${VERSION_NUMBER}"'"|g' "${PARENT_DIR}/bllvm-node/Cargo.toml"
+            sed -i 's|bllvm-protocol = { path = "\.\./bllvm-protocol"|bllvm-protocol = "='"${PROTOCOL_VER}"'"|g' "${PARENT_DIR}/bllvm-node/Cargo.toml"
           fi
           
           # Update bllvm to use published bllvm-node
           if [ -f "${PARENT_DIR}/bllvm/Cargo.toml" ]; then
             echo "Updating bllvm/Cargo.toml..."
-            sed -i 's|bllvm-node = { path = "\.\./bllvm-node"|bllvm-node = "='"${VERSION_NUMBER}"'"|g' "${PARENT_DIR}/bllvm/Cargo.toml"
+            sed -i 's|bllvm-node = { path = "\.\./bllvm-node"|bllvm-node = "='"${NODE_VER}"'"|g' "${PARENT_DIR}/bllvm/Cargo.toml"
           fi
           
           # Update bllvm-sdk to use published bllvm-node (for composition framework)
           if [ -f "${PARENT_DIR}/bllvm-sdk/Cargo.toml" ]; then
             echo "Updating bllvm-sdk/Cargo.toml..."
-            sed -i 's|bllvm-node = { path = "\.\./bllvm-node"|bllvm-node = "='"${VERSION_NUMBER}"'"|g' "${PARENT_DIR}/bllvm-sdk/Cargo.toml"
+            sed -i 's|bllvm-node = { path = "\.\./bllvm-node"|bllvm-node = "='"${NODE_VER}"'"|g' "${PARENT_DIR}/bllvm-sdk/Cargo.toml"
           fi
           
           # Update bllvm-commons to use published bllvm-sdk and bllvm-protocol
