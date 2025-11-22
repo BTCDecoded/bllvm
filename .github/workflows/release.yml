@@ -37,7 +37,7 @@ permissions:
 jobs:
   determine-version:
     name: Determine Release Version
-    runs-on: [self-hosted, Linux, X64]
+    runs-on: [self-hosted, Linux, X64, builds]
     outputs:
       version_tag: ${{ steps.version.outputs.version_tag }}
       version_number: ${{ steps.version.outputs.version_number }}
@@ -104,7 +104,7 @@ jobs:
   release:
     name: Create Release ${{ needs.determine-version.outputs.version_tag }}
     needs: determine-version
-    runs-on: [self-hosted, Linux, X64]
+    runs-on: [self-hosted, Linux, X64, builds]
     timeout-minutes: 180
     steps:
       - name: Checkout bllvm

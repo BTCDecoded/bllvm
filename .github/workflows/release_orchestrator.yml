@@ -25,7 +25,7 @@ permissions:
 jobs:
   determine-scope:
     name: Determine Build Scope
-    runs-on: [self-hosted, Linux, X64]
+    runs-on: [self-hosted, Linux, X64, builds]
     outputs:
       build_consensus: ${{ steps.scope.outputs.build_consensus }}
       build_protocol: ${{ steps.scope.outputs.build_protocol }}
@@ -162,7 +162,7 @@ jobs:
 
   read-versions:
     needs: determine-scope
-    runs-on: [self-hosted, Linux, X64]
+    runs-on: [self-hosted, Linux, X64, builds]
     outputs:
       cp: ${{ steps.parse.outputs.cp }}
       pe: ${{ steps.parse.outputs.pe }}
@@ -322,7 +322,7 @@ jobs:
     if: |
       success() &&
       (needs.determine-scope.outputs.build_governance == 'false' || needs.build-governance-app-image.result == 'success')
-    runs-on: [self-hosted, Linux, X64]
+    runs-on: [self-hosted, Linux, X64, builds]
     steps:
       - name: Determine release type
         id: release-type
@@ -364,7 +364,7 @@ jobs:
   deploy-signal:
     needs: [build-governance-app-image, trigger-release]
     if: always()
-    runs-on: [self-hosted, Linux, X64]
+    runs-on: [self-hosted, Linux, X64, builds]
     steps:
       - name: Send deployment signal to governance-app self-hosted runner
         uses: actions/github-script@v7

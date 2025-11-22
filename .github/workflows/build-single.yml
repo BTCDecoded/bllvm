@@ -20,7 +20,7 @@ permissions:
 jobs:
   build-single:
     name: Build ${{ inputs.repo-name }}
-    runs-on: [self-hosted, Linux, X64]
+    runs-on: [self-hosted, Linux, X64, builds]
     
     steps:
       - name: Checkout commons
