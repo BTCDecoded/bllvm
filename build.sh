@@ -150,10 +150,16 @@ build_repo() {
     local features=""
     case "$VARIANT" in
         base)
-            # Base variant: production optimizations only (for repos that have it)
+            # Base variant: core infrastructure + production optimizations + differentiators
+            # Includes: infrastructure (sysinfo, redb, nix, libc), production, governance, zmq
             case "$repo" in
-                bllvm-consensus|bllvm-protocol|bllvm-node|bllvm)
+                bllvm-consensus|bllvm-protocol)
+                    # Consensus and protocol layers: production only
                     features="production"
+                    ;;
+                bllvm-node|bllvm)
+                    # Node layer: infrastructure + production + governance + zmq (differentiator)
+                    features="sysinfo,redb,nix,libc,production,governance,zmq"
                     ;;
                 *)
                     # Other repos (bllvm-sdk, bllvm-commons) use default features
@@ -172,12 +178,12 @@ build_repo() {
                     features="production,utxo-commitments,ctv"
                     ;;
                 bllvm-node)
-                    # Pass through ctv from bllvm-protocol, include all experimental features
-                    features="production,utxo-commitments,ctv,dandelion,stratum-v2,bip158,sigop,iroh"
+                    # All base features + all experimental features
+                    features="sysinfo,redb,nix,libc,production,governance,zmq,utxo-commitments,ctv,dandelion,stratum-v2,bip158,sigop,iroh,quinn"
                     ;;
                 bllvm)
-                    # bllvm binary inherits from bllvm-node, include all experimental features
-                    features="production,utxo-commitments,ctv,dandelion,stratum-v2,bip158,sigop,iroh"
+                    # bllvm binary inherits from bllvm-node, include all features
+                    features="sysinfo,redb,nix,libc,production,governance,zmq,utxo-commitments,ctv,dandelion,stratum-v2,bip158,sigop,iroh,quinn"
                     ;;
                 *)
                     # Other repos (bllvm-sdk, bllvm-commons) use default features
