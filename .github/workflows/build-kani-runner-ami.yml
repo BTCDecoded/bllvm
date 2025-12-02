@@ -1,0 +1,194 @@
+name: Build Kani Runner AMI
+
+on:
+  workflow_dispatch:
+    inputs:
+      aws_region:
+        description: 'AWS region for AMI build'
+        required: false
+        type: string
+        default: 'us-east-1'
+      instance_type:
+        description: 'Instance type for building AMI'
+        required: false
+        type: string
+        default: 'c6i.4xlarge'
+  push:
+    branches:
+      - main
+    paths:
+      - 'ops/aws/packer/kani-runner-ami.pkr.hcl'
+      - 'tools/bootstrap_runner.sh'
+      - '.github/workflows/build-kani-runner-ami.yml'
+
+permissions:
+  contents: read
+  actions: write
+
+env:
+  AWS_REGION: ${{ github.event.inputs.aws_region || 'us-east-1' }}
+  INSTANCE_TYPE: ${{ github.event.inputs.instance_type || 'c6i.4xlarge' }}
+  AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+  AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+
+jobs:
+  build-ami:
+    name: Build Kani Runner AMI
+    runs-on: [self-hosted, Linux, X64, builds]
+    timeout-minutes: 60  # AMI builds typically take 20-40 minutes
+    outputs:
+      ami_id: ${{ steps.packer.outputs.ami_id }}
+      ami_name: ${{ steps.packer.outputs.ami_name }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      
+      - name: Verify Packer is installed
+        run: |
+          if ! command -v packer &> /dev/null; then
+            echo "❌ Packer not found. Installing Packer..."
+            PACKER_VERSION="1.10.0"
+            curl -fsSL https://releases.hashicorp.com/packer/${PACKER_VERSION}/packer_${PACKER_VERSION}_linux_amd64.zip -o /tmp/packer.zip
+            unzip -q /tmp/packer.zip -d /tmp
+            sudo mv /tmp/packer /usr/local/bin/
+            packer version
+          else
+            echo "✅ Packer found: $(packer version)"
+          fi
+      
+      - name: Configure AWS credentials
+        if: env.AWS_ACCESS_KEY_ID != ''
+        run: |
+          if ! command -v aws &> /dev/null; then
+            echo "Installing AWS CLI..."
+            curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "/tmp/awscliv2.zip"
+            unzip -q /tmp/awscliv2.zip -d /tmp
+            sudo /tmp/aws/install
+          fi
+          echo "✅ AWS CLI found: $(aws --version)"
+          # Configure AWS credentials from secrets if provided
+          mkdir -p ~/.aws
+          cat > ~/.aws/credentials << EOF
+          [default]
+          aws_access_key_id = ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws_secret_access_key = ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          EOF
+          chmod 600 ~/.aws/credentials
+          echo "✅ AWS credentials configured from secrets"
+          aws sts get-caller-identity
+      
+      - name: Verify AWS CLI is configured
+        if: env.AWS_ACCESS_KEY_ID == ''
+        run: |
+          if ! command -v aws &> /dev/null; then
+            echo "❌ AWS CLI not found. Please install AWS CLI on the runner."
+            exit 1
+          fi
+          echo "✅ AWS CLI found: $(aws --version)"
+          # Verify credentials are configured (from runner's existing config)
+          if ! aws sts get-caller-identity &> /dev/null; then
+            echo "⚠️  AWS credentials not configured."
+            echo "Either:"
+            echo "  1. Set AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY secrets, or"
+            echo "  2. Configure AWS CLI on the runner: aws configure"
+            exit 1
+          fi
+          echo "✅ AWS credentials configured"
+          aws sts get-caller-identity
+      
+      - name: Initialize Packer plugins
+        working-directory: ops/aws/packer
+        run: |
+          echo "Initializing Packer plugins..."
+          packer init kani-runner-ami.pkr.hcl
+      
+      - name: Build AMI with Packer
+        id: packer
+        working-directory: ops/aws/packer
+        env:
+          PKR_VAR_aws_region: ${{ env.AWS_REGION }}
+          PKR_VAR_instance_type: ${{ env.INSTANCE_TYPE }}
+        run: |
+          echo "🔨 Building Kani Runner AMI..."
+          echo "Region: ${{ env.AWS_REGION }}"
+          echo "Instance Type: ${{ env.INSTANCE_TYPE }}"
+          
+          # Build AMI and capture output
+          PACKER_OUTPUT=$(packer build -var "aws_region=${{ env.AWS_REGION }}" -var "instance_type=${{ env.INSTANCE_TYPE }}" kani-runner-ami.pkr.hcl 2>&1 | tee /tmp/packer-output.log)
+          
+          # Extract AMI ID from Packer output
+          AMI_ID=$(grep -oP 'ami-[a-z0-9]{17}' /tmp/packer-output.log | tail -1 || echo "")
+          AMI_NAME=$(grep -oP 'kani-runner-\d{4}-\d{2}-\d{2}-\d{4}' /tmp/packer-output.log | tail -1 || echo "")
+          
+          if [ -z "$AMI_ID" ]; then
+            echo "❌ Failed to extract AMI ID from Packer output"
+            echo "Packer output:"
+            cat /tmp/packer-output.log
+            exit 1
+          fi
+          
+          echo "✅ AMI built successfully"
+          echo "AMI ID: $AMI_ID"
+          echo "AMI Name: $AMI_NAME"
+          
+          # Set outputs
+          echo "ami_id=$AMI_ID" >> $GITHUB_OUTPUT
+          echo "ami_name=$AMI_NAME" >> $GITHUB_OUTPUT
+          
+          # Also set as environment variable for next steps
+          echo "AMI_ID=$AMI_ID" >> $GITHUB_ENV
+          echo "AMI_NAME=$AMI_NAME" >> $GITHUB_ENV
+      
+      - name: Upload Packer logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: packer-build-logs
+          path: /tmp/packer-output.log
+          retention-days: 30
+      
+      - name: Create AMI info artifact
+        run: |
+          cat > /tmp/ami-info.json << EOF
+          {
+            "ami_id": "${{ steps.packer.outputs.ami_id }}",
+            "ami_name": "${{ steps.packer.outputs.ami_name }}",
+            "region": "${{ env.AWS_REGION }}",
+            "instance_type": "${{ env.INSTANCE_TYPE }}",
+            "built_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+            "built_by": "${{ github.actor }}",
+            "workflow_run": "${{ github.run_id }}",
+            "commit": "${{ github.sha }}"
+          }
+          EOF
+          cat /tmp/ami-info.json
+      
+      - name: Upload AMI info artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ami-info
+          path: /tmp/ami-info.json
+          retention-days: 90
+      
+      - name: Display AMI ID
+        run: |
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "✅ Kani Runner AMI Built Successfully"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo ""
+          echo "AMI ID: ${{ steps.packer.outputs.ami_id }}"
+          echo "AMI Name: ${{ steps.packer.outputs.ami_name }}"
+          echo "Region: ${{ env.AWS_REGION }}"
+          echo ""
+          echo "📋 Next Steps:"
+          echo "1. Copy the AMI ID above"
+          echo "2. Add it to GitHub org secret: KANI_RUNNER_AMI_ID"
+          echo "3. Or use this workflow output in dependent workflows"
+          echo ""
+          echo "🔗 GitHub Org Secrets:"
+          echo "   https://github.com/organizations/BTCDecoded/settings/secrets/actions"
+          echo ""
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
