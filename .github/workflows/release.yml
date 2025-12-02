@@ -349,7 +349,7 @@ jobs:
             SDK_VER="${{ steps.latest-versions.outputs.sdk }}"
             echo "=== Updating Cargo.toml to use latest crates.io versions ==="
           else
-            VERSION_NUMBER="${{ needs.determine-version.outputs.version_number }}"
+          VERSION_NUMBER="${{ needs.determine-version.outputs.version_number }}"
             PROTOCOL_VER="${VERSION_NUMBER}"
             NODE_VER="${VERSION_NUMBER}"
             SDK_VER="${VERSION_NUMBER}"

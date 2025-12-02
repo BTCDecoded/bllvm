@@ -338,7 +338,7 @@ jobs:
             DATE=$(date +%Y%m%d)
             COMMIT="${{ needs.determine-scope.outputs.trigger_sha }}"
             if [ -z "$COMMIT" ]; then
-              COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+            COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
             else
               COMMIT=$(echo "$COMMIT" | cut -c1-7)
             fi
