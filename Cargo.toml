@@ -20,7 +20,7 @@ name = "bllvm"
 path = "src/bin/main.rs"
 
 [dependencies]
-bllvm-node = { path = "../bllvm-node", package = "bllvm-node" }
+bllvm-node = { path = "../blvm-node", package = "bllvm-node" }
 clap = { version = "=4.4.11", features = ["derive"] }
 tokio = { version = "=1.48.0", features = ["full", "rt-multi-thread", "signal"] }
 tracing = "=0.1.41"
